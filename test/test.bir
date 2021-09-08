@@ -1,0 +1,6 @@
+add [] {
+  init {
+    const a = 0
+    a++
+  }
+}
