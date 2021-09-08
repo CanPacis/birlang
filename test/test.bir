@@ -1,6 +1,11 @@
-add [] {
+let a = 50
+
+add:test [a, b] {
   init {
-    const a = 0
-    a++
+    let index = a + 1
   }
+
+  return test
 }
+
+let b = add:10 ()

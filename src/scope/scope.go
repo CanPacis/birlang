@@ -35,11 +35,13 @@ func (scopestack *Scopestack) UnshiftScope() {
 	scopestack.Scopes = result.Scopes
 }
 
-func (scopestack *Scopestack) PopScope() {
+func (scopestack *Scopestack) PopScope() *Scope {
 	result := Scopestack{}
+	scope := scopestack.Scopes[len(scopestack.Scopes)-1]
 	result.Scopes = append(result.Scopes, scopestack.Scopes[:len(scopestack.Scopes)-1]...)
 
 	scopestack.Scopes = result.Scopes
+	return &scope
 }
 
 func (scopestack *Scopestack) AddVariable(value Value) {
@@ -51,26 +53,34 @@ func (scopestack *Scopestack) IsVariableUpdatable(key string) UpdateReport {
 		return 1
 	} else {
 		scope_value := scopestack.FindVariable(key)
-		if scope_value.Immutable {
+		if scope_value.Immutable || scope_value.Value.Kind == "const" {
 			return 2
 		} else {
+			if scope_value.OuterScope {
+				return 0
+			}
 			if scope_value.Foreign {
 				return 3
 			} else {
-				if scope_value.Value.Kind == "const" {
-					return 2
-				} else {
-					return 0
-				}
+				return 0
 			}
 		}
 	}
 }
 
-func (scopetack *Scopestack) UpdateVariable(key string, value ast.IntPrimitiveExpression) {
-	variable := scopetack.FindVariable(key)
+func (scopestack *Scopestack) UpdateVariable(key string, value ast.IntPrimitiveExpression) {
+	var i int
+	var j int
+	for k, scope := range scopestack.Reverse() {
+		for v, value := range scope.Frame {
+			if value.Key.Value == key {
+				i = k
+				j = v
+			}
+		}
+	}
 
-	variable.Value.Value = value
+	scopestack.Scopes[i].Frame[j].Value = value
 }
 
 func (scopestack *Scopestack) VariableExists(key string) bool {
@@ -86,22 +96,24 @@ func (scopestack *Scopestack) VariableExists(key string) bool {
 }
 
 func (scopestack *Scopestack) FindVariable(key string) ScopeValue {
-	for _, scope := range scopestack.Reverse() {
+	for i, scope := range scopestack.Reverse() {
 		for _, value := range scope.Frame {
 			if value.Key.Value == key {
 				return ScopeValue{
-					Value:     &value,
-					Foreign:   scope.Foreign,
-					Immutable: scope.Immutable,
+					Value:      &value,
+					Foreign:    scope.Foreign,
+					Immutable:  scope.Immutable,
+					OuterScope: i != 0,
 				}
 			}
 		}
 	}
 
 	return ScopeValue{
-		Value:     nil,
-		Foreign:   false,
-		Immutable: false,
+		Value:      nil,
+		Foreign:    false,
+		Immutable:  false,
+		OuterScope: false,
 	}
 }
 
@@ -122,22 +134,24 @@ func (scopestack *Scopestack) BlockExists(key string) bool {
 }
 
 func (scopestack *Scopestack) FindBlock(key string) ScopeBlock {
-	for _, scope := range scopestack.Reverse() {
+	for i, scope := range scopestack.Reverse() {
 		for _, value := range scope.Blocks {
 			if value.Name.Value == key {
 				return ScopeBlock{
-					Block:     &value,
-					Foreign:   scope.Foreign,
-					Immutable: scope.Immutable,
+					Block:      &value,
+					Foreign:    scope.Foreign,
+					Immutable:  scope.Immutable,
+					OuterScope: i != 0,
 				}
 			}
 		}
 	}
 
 	return ScopeBlock{
-		Block:     nil,
-		Foreign:   false,
-		Immutable: false,
+		Block:      nil,
+		Foreign:    false,
+		Immutable:  false,
+		OuterScope: false,
 	}
 }
 
@@ -146,15 +160,23 @@ func (scopestack *Scopestack) GetCurrentScope() *Scope {
 }
 
 type ScopeBlock struct {
-	Block     *ast.BlockDeclarationStatement
-	Foreign   bool
-	Immutable bool
+	Block      *ast.BlockDeclarationStatement `json:"block"`
+	Foreign    bool                           `json:"foreign"`
+	Immutable  bool                           `json:"immutable"`
+	OuterScope bool                           `json:"outer_scope"`
 }
 
 type ScopeValue struct {
-	Value     *Value
-	Foreign   bool
-	Immutable bool
+	Value      *Value `json:"value"`
+	Foreign    bool   `json:"foreign"`
+	Immutable  bool   `json:"immutable"`
+	OuterScope bool   `json:"outer_scope"`
+}
+
+type Value struct {
+	Key   ast.Identifier             `json:"key"`
+	Value ast.IntPrimitiveExpression `json:"value"`
+	Kind  string                     `json:"kind"`
 }
 
 type Scope struct {
@@ -162,12 +184,6 @@ type Scope struct {
 	Foreign   bool                            `json:"foreign"`
 	Frame     []Value                         `json:"frame"`
 	Blocks    []ast.BlockDeclarationStatement `json:"blocks"`
-}
-
-type Value struct {
-	Key   ast.Identifier             `json:"key"`
-	Value ast.IntPrimitiveExpression `json:"value"`
-	Kind  string                     `json:"kind"`
 }
 
 type UpdateReport int

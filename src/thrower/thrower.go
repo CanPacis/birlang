@@ -6,35 +6,27 @@ import (
 	"strings"
 
 	"github.com/canpacis/birlang/src/ast"
+	"github.com/canpacis/birlang/src/util"
 	"github.com/mitchellh/mapstructure"
 )
 
 type Thrower struct {
 	Owner interface{}
+	Color util.Color
 }
 
 func (thrower *Thrower) Throw(message string, position ast.Position) {
 	var engine map[string]interface{}
 	mapstructure.Decode(thrower.Owner, &engine)
 
-	color_cyan := ""
-	color_yellow := ""
-	color_red := ""
-
-	if engine["ColoredOutput"].(bool) {
-		color_cyan = "\033[0;36m"
-		color_yellow = "\033[1;33m"
-		color_red = "\033[1;31m"
-	}
-
 	if !engine["Anonymous"].(bool) {
-		os.Stdout.WriteString(message + " at " + color_cyan + strconv.Itoa(int(position.Line)) + ":" + strconv.Itoa(int(position.Col)) + "\033[0m in " + color_yellow + engine["Filename"].(string) + "\033[0m\n")
+		os.Stdout.WriteString(thrower.Color.OutputRed("[ERROR]") + " " + message + " at " + thrower.Color.OutputCyan(strconv.Itoa(int(position.Line))+":"+strconv.Itoa(int(position.Col))) + " in " + thrower.Color.OutputYellow(engine["Filename"].(string)) + "\n")
 		os.Stdout.WriteString("\n" + thrower.GetSnippet(position) + "\n")
 		os.Stdout.WriteString("\nCallstack:\n\t" + thrower.GetCallstack() + "\n")
-		os.Stdout.WriteString("\nFile:\n\t" + color_red + engine["URI"].(string) + "\033[0m\n")
+		os.Stdout.WriteString("\nFile:\n\t" + thrower.Color.OutputRed(engine["URI"].(string)) + "\n")
 		os.Exit(1)
 	} else {
-		os.Stdout.WriteString(message + " in " + color_yellow + "[REPL]" + "\033[0m\n")
+		os.Stdout.WriteString(thrower.Color.OutputRed("[ERROR]") + " " + message + " in " + thrower.Color.OutputYellow("[REPL]") + "\n")
 	}
 }
 
@@ -42,7 +34,7 @@ func (thrower *Thrower) ThrowAnonymous(message string) {
 	var engine map[string]interface{}
 	mapstructure.Decode(thrower.Owner, &engine)
 
-	os.Stdout.WriteString(message + "\n")
+	os.Stdout.WriteString(thrower.Color.OutputRed("[ERROR]") + " " + message + "\n")
 
 	if !engine["Anonymous"].(bool) {
 		os.Exit(1)
@@ -63,21 +55,31 @@ func (thrower *Thrower) GetCallstack() string {
 	var engine map[string]interface{}
 	mapstructure.Decode(thrower.Owner, &engine)
 
-	color_cyan := ""
-	color_grey := ""
-
-	if engine["ColoredOutput"].(bool) {
-		color_cyan = "\033[0;36m"
-		color_grey = "\033[1;30m"
-	}
-
 	var callstack []map[string]interface{}
 	mapstructure.Decode(engine["Callstack"], &callstack)
 
 	result := []string{}
 	for _, stack := range callstack {
-		result = append(result, color_cyan+stack["Label"].(string)+"\033[0m"+color_grey+" ()\033[0m")
+		result = append(result, thrower.Color.OutputCyan(stack["Label"].(string))+thrower.Color.OutputGrey(" ()"))
 	}
 
 	return strings.Join(result, "\n\t")
+}
+
+func (thrower *Thrower) Warn(message string, position ast.Position) {
+	var engine map[string]interface{}
+	mapstructure.Decode(thrower.Owner, &engine)
+
+	if engine["VerbosityLevel"].(int) == 1 || engine["VerbosityLevel"].(int) == 2 {
+		if !engine["Anonymous"].(bool) {
+			os.Stdout.WriteString(thrower.Color.OutputYellow("[WARNING]") + " " + message + " at " + thrower.Color.OutputCyan(strconv.Itoa(int(position.Line))+":"+strconv.Itoa(int(position.Col))) + " in " + thrower.Color.OutputYellow(engine["Filename"].(string)) + "\n")
+			if engine["VerbosityLevel"].(int) == 2 {
+				os.Stdout.WriteString("\n" + thrower.GetSnippet(position) + "\n")
+				os.Stdout.WriteString("\nCallstack:\n\t" + thrower.GetCallstack() + "\n")
+				os.Stdout.WriteString("\nFile:\n\t" + thrower.Color.OutputRed(engine["URI"].(string)) + "\n")
+			}
+		} else {
+			os.Stdout.WriteString(thrower.Color.OutputYellow("[WARNING]") + " " + message + " in " + thrower.Color.OutputYellow("[REPL]") + "\n")
+		}
+	}
 }

@@ -9,15 +9,14 @@ import (
 
 func main() {
 	if len(os.Args) > 1 {
-		instance := engine.BirEngine{Path: os.Args[1]}
-		instance.Init()
+		instance := engine.NewEngine(os.Args[1], false, false, 0)
 		instance.Run()
 
-		// fmt.Printf("%+v", instance.Uses[0].GetCurrentScope())
+		// v, _ := json.MarshalIndent(instance.GetCurrentScope(), "", "  ")
+		// fmt.Println(string(v))
 	} else {
 		repl_caret := "[BIR] "
-		instance := engine.BirEngine{Anonymous: true}
-		instance.Init()
+		instance := engine.NewEngine("", true, false, 0)
 		scanner := bufio.NewScanner(os.Stdin)
 		os.Stdout.WriteString(repl_caret)
 

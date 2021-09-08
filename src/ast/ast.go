@@ -42,20 +42,24 @@ type BlockDeclarationStatement struct {
 	Implements   Identifier   `json:"implements"`
 	Popluate     interface{}  `json:"popluate"`
 	Position     Position     `json:"position"`
+	Instance     interface{}  `json:"instance"`
 }
 
 type NativeBlockDeclarationStatement struct {
-	Operation    string       `json:"operation"`
-	Owner        string       `json:"owner"`
-	Name         Identifier   `json:"name"`
-	Verbs        []Identifier `json:"verbs"`
-	Arguments    []Identifier `json:"arguments"`
-	Body         func()       `json:"body"`
-	Implementing bool         `json:"implementing"`
-	Implements   Identifier   `json:"implements"`
-	Popluate     interface{}  `json:"popluate"`
-	Position     Position     `json:"position"`
+	Operation    string         `json:"operation"`
+	Owner        string         `json:"owner"`
+	Name         Identifier     `json:"name"`
+	Verbs        []Identifier   `json:"verbs"`
+	Arguments    []Identifier   `json:"arguments"`
+	Body         NativeFunction `json:"body"`
+	Implementing bool           `json:"implementing"`
+	Implements   Identifier     `json:"implements"`
+	Popluate     interface{}    `json:"popluate"`
+	Position     Position       `json:"position"`
+	Instance     interface{}    `json:"instance"`
 }
+
+type NativeFunction func(arguments []IntPrimitiveExpression, verbs []IntPrimitiveExpression) IntPrimitiveExpression
 
 type ForStatement struct {
 	Operation   string                 `json:"operation"`
@@ -160,18 +164,18 @@ type ArithmeticExpression struct {
 }
 
 type BlockCallExpression struct {
-	Operation string       `json:"operation"`
-	Name      Identifier   `json:"name"`
-	Verbs     []Expression `json:"verbs"`
-	Arguments []Expression `json:"arguments"`
-	Position  Position     `json:"position"`
+	Operation string                   `json:"operation"`
+	Name      Identifier               `json:"name"`
+	Verbs     []map[string]interface{} `json:"verbs"`
+	Arguments []map[string]interface{} `json:"arguments"`
+	Position  Position                 `json:"position"`
 }
 
 type ScopeMutaterExpression struct {
-	Operation string       `json:"operation"`
-	Mutater   string       `json:"mutater"`
-	Arguments []Expression `json:"arguments"`
-	Position  Position     `json:"position"`
+	Operation string                   `json:"operation"`
+	Mutater   string                   `json:"mutater"`
+	Arguments []map[string]interface{} `json:"arguments"`
+	Position  Position                 `json:"position"`
 }
 
 type Identifier struct {
