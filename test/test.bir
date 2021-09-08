@@ -5,7 +5,9 @@ add:test [a, b] {
     let index = a + 1
   }
 
-  return test
+  return test + index
 }
 
 let b = add:10 ()
+
+bir (4,5,6)

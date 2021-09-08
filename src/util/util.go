@@ -47,6 +47,21 @@ func GenerateIdentifier(name string) ast.Identifier {
 	}
 }
 
+func GenerateNativeFunction(name string, body ast.NativeFunction) ast.BlockDeclarationStatement {
+	return ast.BlockDeclarationStatement{
+		Name:         GenerateIdentifier(name),
+		Native:       true,
+		Verbs:        []ast.Identifier{},
+		Arguments:    []ast.Identifier{},
+		Implementing: false,
+		Implements:   ast.Identifier{},
+		Popluate:     nil,
+		Position:     ast.Position{Line: 1, Col: 0},
+		Instance:     nil,
+		Body:         body,
+	}
+}
+
 func UUID() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)

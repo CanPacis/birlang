@@ -121,6 +121,10 @@ func (scopestack *Scopestack) AddBlock(block ast.BlockDeclarationStatement) {
 	scopestack.GetCurrentScope().Blocks = append(scopestack.GetCurrentScope().Blocks, block)
 }
 
+func (scopestack *Scopestack) AddNativeBlock(block ast.BlockDeclarationStatement) {
+	scopestack.GetCurrentScope().Blocks = append(scopestack.GetCurrentScope().Blocks, block)
+}
+
 func (scopestack *Scopestack) BlockExists(key string) bool {
 	for _, scope := range scopestack.Reverse() {
 		for _, value := range scope.Blocks {

@@ -37,26 +37,13 @@ type BlockDeclarationStatement struct {
 	Name         Identifier   `json:"name"`
 	Verbs        []Identifier `json:"verbs"`
 	Arguments    []Identifier `json:"arguments"`
-	Body         BlockBody    `json:"body"`
+	Body         interface{}  `json:"body"`
 	Implementing bool         `json:"implementing"`
 	Implements   Identifier   `json:"implements"`
 	Popluate     interface{}  `json:"popluate"`
 	Position     Position     `json:"position"`
 	Instance     interface{}  `json:"instance"`
-}
-
-type NativeBlockDeclarationStatement struct {
-	Operation    string         `json:"operation"`
-	Owner        string         `json:"owner"`
-	Name         Identifier     `json:"name"`
-	Verbs        []Identifier   `json:"verbs"`
-	Arguments    []Identifier   `json:"arguments"`
-	Body         NativeFunction `json:"body"`
-	Implementing bool           `json:"implementing"`
-	Implements   Identifier     `json:"implements"`
-	Popluate     interface{}    `json:"popluate"`
-	Position     Position       `json:"position"`
-	Instance     interface{}    `json:"instance"`
+	Native       bool         `json:"native"`
 }
 
 type NativeFunction func(arguments []IntPrimitiveExpression, verbs []IntPrimitiveExpression) IntPrimitiveExpression
