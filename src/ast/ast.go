@@ -46,7 +46,13 @@ type BlockDeclarationStatement struct {
 	Native       bool         `json:"native"`
 }
 
-type NativeFunction func(arguments []IntPrimitiveExpression, verbs []IntPrimitiveExpression) IntPrimitiveExpression
+type NativeFunction func(arguments []IntPrimitiveExpression, verbs []IntPrimitiveExpression) NativeFunctionReturn
+type NativeFunctionReturn struct {
+	Value   IntPrimitiveExpression `json:"value"`
+	Error   bool                   `json:"error"`
+	Warn    bool                   `json:"warn"`
+	Message string                 `json:"string"`
+}
 
 type ForStatement struct {
 	Operation   string                 `json:"operation"`

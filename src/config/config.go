@@ -6,8 +6,7 @@ import (
 	"path"
 
 	"github.com/canpacis/birlang/src/engine"
-	"github.com/canpacis/birlang/src/thrower"
-	"github.com/canpacis/birlang/src/util"
+	"github.com/mitchellh/mapstructure"
 )
 
 type Config struct {
@@ -27,14 +26,9 @@ func HandleConfig(instance *engine.BirEngine) {
 		if err != nil {
 			instance.Thrower.WarnAnonymous("Could not properly parse the config file")
 		} else {
-			instance.ColoredOutput = config.ColoredOutput
-			instance.VerbosityLevel = config.VerbosityLevel
-
-			if config.MaximumCallstackSize != 0 {
-				instance.MaximumCallstackSize = config.MaximumCallstackSize
-			}
-
-			instance.Thrower = thrower.Thrower{Owner: instance, Color: util.NewColor(instance.ColoredOutput)}
+			var mapped map[string]interface{}
+			mapstructure.Decode(config, &mapped)
+			instance.Config = mapped
 		}
 	}
 }

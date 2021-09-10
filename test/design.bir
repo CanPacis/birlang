@@ -4,6 +4,8 @@ use "std" as std
 message implements console {"Hello, World!"}
 message:output ()
 
+// Namespaces
+
 namespace User {
   query implements console 
   fullname implements string 
@@ -18,7 +20,22 @@ namespace User {
   }
 }
 
+// Accessing the scope
 
 User.ask_name ()
 User.fullname:output ()
 print (User.age)
+
+// Pointer super block
+
+file implements pointer {"./bir.config.json"}
+file:read (std.file)
+
+data implements json {"./bir.config.json"}
+data:read (0) // 1
+data:read (2, 1) // 21
+data:read (2, 0, 8) // 32
+
+// OR
+
+file implements io {"./bir.config.json", pointed}

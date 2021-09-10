@@ -1,3 +1,4 @@
 {
-  "colored_output": true
+  "colored_output": true,
+  "verbosity_level": 2
 }

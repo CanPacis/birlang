@@ -1,3 +1,12 @@
+use "std"
+
 print [message] {
-  bir:1000000 (message)
+}
+
+console:verb [] {
+  init {
+    let index = 0
+  }
+
+  
 }

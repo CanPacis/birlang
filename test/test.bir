@@ -1,13 +1,4 @@
-add [a] {
-  init {
-    let index = 0
-    add ()
-  }
+use "std"
+use "console"
 
-  throw index
-}
-
-toplam implements add {"Hi"}
-t implements add {[10, 20, 30, 40]}
-
-add ()
+message implements console {"Hello, World!"}

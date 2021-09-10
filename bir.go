@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/canpacis/birlang/src/config"
 	"github.com/canpacis/birlang/src/engine"
 )
 
@@ -12,7 +11,6 @@ func main() {
 	if len(os.Args) > 1 {
 		instance := engine.NewEngine(os.Args[1], false, false, 0)
 		instance.Init()
-		config.HandleConfig(&instance)
 		instance.Run()
 
 		// v, _ := json.MarshalIndent(instance.GetCurrentScope().Frame, "", "  ")

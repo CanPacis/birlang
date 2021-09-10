@@ -62,6 +62,15 @@ func GenerateNativeFunction(name string, body ast.NativeFunction) ast.BlockDecla
 	}
 }
 
+func GenerateNativeFunctionReturn(_error bool, _warn bool, message string, value int64) ast.NativeFunctionReturn {
+	return ast.NativeFunctionReturn{
+		Error:   _error,
+		Warn:    _warn,
+		Message: message,
+		Value:   GenerateIntPrimitive(value),
+	}
+}
+
 func UUID() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)

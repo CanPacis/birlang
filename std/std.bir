@@ -1,0 +1,4 @@
+const std_push = 1000000 
+const std_pull = 1000001 
+const std_read = 1000002 
+const std_write = 1000003 

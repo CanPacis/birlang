@@ -16,6 +16,24 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+func ApplyConfig(options map[string]interface{}, instance *BirEngine) {
+	var config map[string]interface{}
+	mapstructure.Decode(options, &config)
+
+	instance.ColoredOutput = config["ColoredOutput"].(bool)
+	instance.VerbosityLevel = config["VerbosityLevel"].(int)
+
+	if config["MaximumCallstackSize"] != 0 {
+		instance.MaximumCallstackSize = config["MaximumCallstackSize"].(int)
+	}
+	instance.Thrower = thrower.Thrower{Owner: instance, Color: util.NewColor(instance.ColoredOutput)}
+
+	for _, use := range instance.Uses {
+		ApplyConfig(instance.Config, &use)
+	}
+
+}
+
 type BirEngine struct {
 	ID                   string                    `json:"id"`
 	Anonymous            bool                      `json:"anonymous"`
@@ -34,6 +52,7 @@ type BirEngine struct {
 	Thrower              thrower.Thrower           `json:"thrower"`
 	ColoredOutput        bool                      `json:"colored_output"`
 	Implementors         []implementor.Implementor `json:"implementors"`
+	Config               map[string]interface{}    `json:"config"`
 }
 
 type Callstack struct {
@@ -177,6 +196,8 @@ func (engine *BirEngine) Run() {
 }
 
 func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveExpression {
+	var value ast.IntPrimitiveExpression
+
 	for _, statement := range callstack.Stack {
 		operation := statement.(map[string]interface{})["operation"]
 		pos := statement.(map[string]interface{})["position"]
@@ -210,8 +231,6 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 				engine.Thrower.Throw("Top level throw statements are not allowed", position, engine.Callstack)
 			} else {
 				engine.Thrower.Throw("Bir process has thrown error with value '"+strconv.Itoa(int(value.Value))+"'", position, engine.Callstack)
-				// v, _ := json.MarshalIndent(engine.Callstack, "", "  ")
-				// fmt.Println(string(v))
 			}
 			engine.Callstack = engine.PopCallstack()
 			return value
@@ -230,9 +249,7 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 		case "block_call":
 			var result map[string]interface{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
-			value := engine.ResolveBlockCall(result, "")
-			engine.Callstack = engine.PopCallstack()
-			return value
+			value = engine.ResolveBlockCall(result, "")
 		case "scope_mutater_expression":
 			var result map[string]interface{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
@@ -262,7 +279,11 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 	}
 
 	engine.Callstack = engine.PopCallstack()
-	return util.GenerateIntPrimitive(-1)
+	if value.Position.Line != 0 {
+		return value
+	} else {
+		return util.GenerateIntPrimitive(-1)
+	}
 }
 
 func (engine *BirEngine) ResolveAssignStatement(statement ast.AssignStatement) {
@@ -585,7 +606,9 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 		if len(engine.Callstack) <= engine.MaximumCallstackSize {
 			if result.Foreign {
 				owner := engine.FindOwner(result.Block.Owner, expression)
+				owner.Scopestack.PushScope(engine.GetCurrentScope())
 				owner.ResolveBlockCall(raw, owner.ID)
+				owner.Scopestack.PopScope()
 				return util.GenerateIntPrimitive(-1)
 			} else {
 				if result.Block.Native {
@@ -607,7 +630,19 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 						Identifier: expression.Name.Value,
 						Stack:      []interface{}{},
 					})
-					return body(verbs, arguments)
+					native_function_return := body(verbs, arguments)
+					if native_function_return.Error {
+						engine.Thrower.Throw(native_function_return.Message, expression.Position, engine.Callstack)
+						engine.Callstack = engine.PopCallstack()
+						return native_function_return.Value
+					} else if native_function_return.Warn {
+						engine.Thrower.Warn(native_function_return.Message, expression.Position, engine.Callstack)
+						engine.Callstack = engine.PopCallstack()
+						return native_function_return.Value
+					} else {
+						engine.Callstack = engine.PopCallstack()
+						return native_function_return.Value
+					}
 				}
 				if result.Block.Implementing {
 					implemented := engine.Scopestack.FindBlock(result.Block.Implements.Value)
