@@ -52,9 +52,6 @@ func (thrower *Thrower) GetSnippet(position ast.Position) string {
 }
 
 func (thrower *Thrower) GetCallstack(c interface{}) string {
-	// var engine map[string]interface{}
-	// mapstructure.Decode(thrower.Owner, &engine)
-
 	var callstack []map[string]interface{}
 	mapstructure.Decode(c, &callstack)
 
@@ -81,5 +78,16 @@ func (thrower *Thrower) Warn(message string, position ast.Position, callstack in
 		} else {
 			os.Stdout.WriteString(thrower.Color.OutputYellow("[WARNING]") + " " + message + " in " + thrower.Color.OutputYellow("[REPL]") + "\n")
 		}
+	}
+}
+
+func (thrower *Thrower) WarnAnonymous(message string) {
+	var engine map[string]interface{}
+	mapstructure.Decode(thrower.Owner, &engine)
+
+	if !engine["Anonymous"].(bool) {
+		os.Stdout.WriteString(thrower.Color.OutputYellow("[WARNING]") + " " + message + "\n")
+	} else {
+		os.Stdout.WriteString(thrower.Color.OutputYellow("[WARNING]") + " " + message + " in " + thrower.Color.OutputYellow("[REPL]") + "\n")
 	}
 }

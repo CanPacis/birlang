@@ -26,7 +26,7 @@ type BirEngine struct {
 	Content              string                    `json:"content"`
 	VerbosityLevel       int                       `json:"verbosity_level"`
 	Parsed               map[string]interface{}    `json:"parsed"`
-	MaximumCallstackSize uint16                    `json:"maximum_callstack_size"`
+	MaximumCallstackSize int                       `json:"maximum_callstack_size"`
 	Callstack            []Callstack               `json:"callstack"`
 	Scopestack           scope.Scopestack          `json:"scopestack"`
 	StdPath              string                    `json:"std_path"`
@@ -71,7 +71,7 @@ func (engine BirEngine) HandleAnonymousError(err error) {
 func (engine *BirEngine) Init() {
 	engine.URI = "file://" + engine.Path
 	engine.ID = util.UUID()
-	engine.MaximumCallstackSize = 8000
+	engine.MaximumCallstackSize = 10
 	engine.Thrower = thrower.Thrower{Owner: engine, Color: util.NewColor(engine.ColoredOutput)}
 	cwd, _ := os.Getwd()
 	engine.StdPath = path.Join(cwd, "std")
@@ -582,81 +582,94 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 	if engine.Scopestack.BlockExists(expression.Name.Value) {
 		result := engine.Scopestack.FindBlock(expression.Name.Value)
 
-		if result.Foreign {
-			owner := engine.FindOwner(result.Block.Owner, expression)
-			owner.ResolveBlockCall(raw, owner.ID)
-			return util.GenerateIntPrimitive(-1)
-		} else {
-			if result.Block.Native {
-				var body ast.NativeFunction
-				engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
-
-				arguments := []ast.IntPrimitiveExpression{}
-				verbs := []ast.IntPrimitiveExpression{}
-
-				for _, argument := range expression.Arguments {
-					arguments = append(arguments, engine.ResolveExpression(argument))
-				}
-				for _, verb := range expression.Verbs {
-					verbs = append(verbs, engine.ResolveExpression(verb))
-				}
-
-				engine.Callstack = engine.PushCallstack(Callstack{
-					Label:      expression.Name.Value,
-					Identifier: expression.Name.Value,
-					Stack:      []interface{}{},
-				})
-				return body(verbs, arguments)
-			}
-			if result.Block.Implementing {
-				implemented := engine.Scopestack.FindBlock(result.Block.Implements.Value)
-				instance := result.Block.Instance.(*scope.Scope)
-				engine.Scopestack.PushScope(*instance)
-
-				local_scope := []scope.Value{}
-
-				local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
-				local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
-
-				for _, value := range local_scope {
-					engine.Scopestack.AddVariable(value)
-				}
-
-				var body map[string][]interface{}
-				engine.HandleError(mapstructure.Decode(implemented.Block.Body, &body), expression.Position)
-				engine.Callstack = engine.PushCallstack(Callstack{
-					Label:      result.Block.Name.Value + "->" + implemented.Block.Name.Value,
-					Identifier: result.Block.Name.Value,
-					Stack:      body["program"],
-				})
-
-				value := engine.ResolveCallstack(engine.GetCurrentCallStack())
-				engine.Scopestack.PopScope()
-				return value
+		if len(engine.Callstack) <= engine.MaximumCallstackSize {
+			if result.Foreign {
+				owner := engine.FindOwner(result.Block.Owner, expression)
+				owner.ResolveBlockCall(raw, owner.ID)
+				return util.GenerateIntPrimitive(-1)
 			} else {
-				var body ast.BlockBody
-				engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
-				instance := result.Block.Instance.(*scope.Scope)
-				engine.Scopestack.PushScope(*instance)
+				if result.Block.Native {
+					var body ast.NativeFunction
+					engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
 
-				local_scope := []scope.Value{}
+					arguments := []ast.IntPrimitiveExpression{}
+					verbs := []ast.IntPrimitiveExpression{}
 
-				local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
-				local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+					for _, argument := range expression.Arguments {
+						arguments = append(arguments, engine.ResolveExpression(argument))
+					}
+					for _, verb := range expression.Verbs {
+						verbs = append(verbs, engine.ResolveExpression(verb))
+					}
 
-				for _, value := range local_scope {
-					engine.Scopestack.AddVariable(value)
+					engine.Callstack = engine.PushCallstack(Callstack{
+						Label:      expression.Name.Value,
+						Identifier: expression.Name.Value,
+						Stack:      []interface{}{},
+					})
+					return body(verbs, arguments)
 				}
+				if result.Block.Implementing {
+					implemented := engine.Scopestack.FindBlock(result.Block.Implements.Value)
+					instance := result.Block.Instance.(*scope.Scope)
+					engine.Scopestack.PushScope(*instance)
 
-				engine.Callstack = engine.PushCallstack(Callstack{
-					Label:      expression.Name.Value,
-					Identifier: expression.Name.Value,
-					Stack:      body.Program,
-				})
-				value := engine.ResolveCallstack(engine.GetCurrentCallStack())
-				engine.Scopestack.PopScope()
-				return value
+					local_scope := []scope.Value{}
+
+					local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
+					local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+
+					for _, value := range local_scope {
+						engine.Scopestack.AddVariable(value)
+					}
+
+					var body map[string][]interface{}
+					engine.HandleError(mapstructure.Decode(implemented.Block.Body, &body), expression.Position)
+					engine.Callstack = engine.PushCallstack(Callstack{
+						Label:      result.Block.Name.Value + "->" + implemented.Block.Name.Value,
+						Identifier: result.Block.Name.Value,
+						Stack:      body["program"],
+					})
+
+					value := engine.ResolveCallstack(engine.GetCurrentCallStack())
+					engine.Scopestack.PopScope()
+					return value
+				} else {
+					var body ast.BlockBody
+					engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
+					instance := result.Block.Instance.(*scope.Scope)
+					engine.Scopestack.PushScope(*instance)
+
+					local_scope := []scope.Value{}
+
+					local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
+					local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+
+					for _, value := range local_scope {
+						engine.Scopestack.AddVariable(value)
+					}
+
+					engine.Callstack = engine.PushCallstack(Callstack{
+						Label:      expression.Name.Value,
+						Identifier: expression.Name.Value,
+						Stack:      body.Program,
+					})
+					value := engine.ResolveCallstack(engine.GetCurrentCallStack())
+					engine.Scopestack.PopScope()
+					return value
+				}
 			}
+		} else {
+			var callstack []Callstack
+
+			if len(engine.Callstack) >= 10 {
+				callstack = engine.Callstack[:10]
+			} else {
+				callstack = engine.Callstack
+			}
+
+			engine.Thrower.Throw("Bir process has overflown the maximum callstack size", expression.Position, callstack)
+			return util.GenerateIntPrimitive(-1)
 		}
 	} else {
 		engine.Thrower.Throw("Could not find block '"+expression.Name.Value+"'", expression.Position, engine.Callstack)
@@ -771,6 +784,5 @@ func NewEngine(path string, anonymous bool, colored_output bool, verbosity_level
 		VerbosityLevel: verbosity_level,
 		Implementors:   []implementor.Implementor{{Name: "bir"}},
 	}
-	engine.Init()
 	return engine
 }

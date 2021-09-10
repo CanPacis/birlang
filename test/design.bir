@@ -1,0 +1,24 @@
+use "console"
+use "std" as std
+
+message implements console {"Hello, World!"}
+message:output ()
+
+namespace User {
+  query implements console 
+  fullname implements string 
+  const age = 21
+
+  ask_name [] {
+    query:input ()
+
+    for query:length () as i {
+      fullname:push (query:read (i))
+    }
+  }
+}
+
+
+User.ask_name ()
+User.fullname:output ()
+print (User.age)
