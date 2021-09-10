@@ -2,3 +2,4 @@ use "std"
 use "console"
 
 message implements console {"Hello, World!"}
+message:out ()

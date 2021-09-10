@@ -1,12 +1,17 @@
 use "std"
-
-print [message] {
-}
+const out = 1000100
 
 console:verb [] {
   init {
     let index = 0
   }
 
-  
+  switch verb {
+    case out {
+      for index as i {
+        bir:std_push ([Read i])
+      }
+      bir:std_write (std_out)
+    }
+  }
 }

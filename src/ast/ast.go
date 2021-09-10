@@ -166,9 +166,16 @@ type BlockCallExpression struct {
 
 type ScopeMutaterExpression struct {
 	Operation string                   `json:"operation"`
-	Mutater   string                   `json:"mutater"`
+	Mutater   MutaterKeyword           `json:"mutater"`
 	Arguments []map[string]interface{} `json:"arguments"`
 	Position  Position                 `json:"position"`
+}
+
+type MutaterKeyword struct {
+	Operation string   `json:"operation"`
+	Negative  bool     `json:"negative"`
+	Value     string   `json:"value"`
+	Position  Position `json:"position"`
 }
 
 type Identifier struct {

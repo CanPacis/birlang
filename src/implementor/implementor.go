@@ -18,6 +18,8 @@ const (
 	StdPull
 	StdRead
 	StdWrite
+	StdOut
+	StdFile
 )
 
 func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
@@ -30,7 +32,7 @@ func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arg
 		case StdRead:
 			return implementor.Read(arguments)
 		case StdWrite:
-			return implementor.Write()
+			return implementor.Write(arguments)
 		}
 		return util.GenerateNativeFunctionReturn(false, false, "", -1)
 	} else {
@@ -55,8 +57,16 @@ func (implementor Implementor) Read(arguments []ast.IntPrimitiveExpression) ast.
 	return util.GenerateNativeFunctionReturn(false, false, "", -1)
 }
 
-func (implementor Implementor) Write() ast.NativeFunctionReturn {
-	os.Stdout.WriteString(string(io_buffer))
-	io_buffer = []byte{}
-	return util.GenerateNativeFunctionReturn(false, false, "", -1)
+func (implementor Implementor) Write(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
+	if len(arguments) > 0 {
+		switch arguments[0].Value {
+		case StdOut:
+			os.Stdout.WriteString(string(io_buffer))
+		case StdFile:
+		}
+		io_buffer = []byte{}
+		return util.GenerateNativeFunctionReturn(false, false, "", -1)
+	} else {
+		return util.GenerateNativeFunctionReturn(true, false, "Native 'bir' block's 'write' verb needs at least 1 argument", -1)
+	}
 }

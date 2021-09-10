@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 
 	"github.com/canpacis/birlang/src/ast"
 	"github.com/canpacis/birlang/src/implementor"
@@ -73,6 +74,18 @@ func (engine *BirEngine) PopCallstack() []Callstack {
 	result = append(result, engine.Callstack[:len(engine.Callstack)-1]...)
 
 	return result
+}
+
+func (engine *BirEngine) ReverseCallstack() []Callstack {
+	a := make([]Callstack, len(engine.Callstack))
+	copy(a, engine.Callstack)
+
+	for i := len(a)/2 - 1; i >= 0; i-- {
+		opp := len(a) - 1 - i
+		a[i], a[opp] = a[opp], a[i]
+	}
+
+	return a
 }
 
 func (engine BirEngine) HandleError(err error, position ast.Position) {
@@ -351,7 +364,9 @@ func (engine *BirEngine) ResolveWhileStatement(statement ast.WhileStatement) {
 			Stack:      statement.Body,
 		})
 
+		engine.Scopestack.PushScope(scope.Scope{})
 		engine.ResolveCallstack(engine.GetCurrentCallStack())
+		engine.Scopestack.PopScope()
 		condition = engine.ResolveExpression(statement.Statement)
 	}
 }
@@ -383,9 +398,12 @@ func (engine *BirEngine) ResolveIfStatement(statement ast.IfStatement) ast.IntPr
 			Stack:      block,
 		})
 
-		return engine.ResolveCallstack(engine.GetCurrentCallStack())
+		result := engine.ResolveCallstack(engine.GetCurrentCallStack())
+		engine.Scopestack.PopScope()
+		return result
 	}
 
+	engine.Scopestack.PushScope(scope.Scope{})
 	if condition.Value == 1 {
 		return runBlock("if", statement.Body)
 	} else {
@@ -405,10 +423,15 @@ func (engine *BirEngine) ResolveIfStatement(statement ast.IfStatement) ast.IntPr
 				if statement.Else != nil {
 					return runBlock("else", statement.Else)
 				}
-				return util.GenerateIntPrimitive(-1)
+				result := util.GenerateIntPrimitive(-1)
+				engine.Scopestack.PopScope()
+				return result
+
 			}
 		}
-		return util.GenerateIntPrimitive(-1)
+		result := util.GenerateIntPrimitive(-1)
+		engine.Scopestack.PopScope()
+		return result
 	}
 }
 
@@ -431,7 +454,10 @@ func (engine *BirEngine) ResolveSwitchStatement(statement ast.SwitchStatement) a
 			Stack:      body,
 		})
 
-		return engine.ResolveCallstack(engine.GetCurrentCallStack())
+		engine.Scopestack.PushScope(scope.Scope{})
+		result := engine.ResolveCallstack(engine.GetCurrentCallStack())
+		engine.Scopestack.PopScope()
+		return result
 	} else {
 		if statement.Default.Body != nil {
 			engine.Callstack = engine.PushCallstack(Callstack{
@@ -440,14 +466,16 @@ func (engine *BirEngine) ResolveSwitchStatement(statement ast.SwitchStatement) a
 				Stack:      statement.Default.Body,
 			})
 
-			return engine.ResolveCallstack(engine.GetCurrentCallStack())
+			engine.Scopestack.PushScope(scope.Scope{})
+			result := engine.ResolveCallstack(engine.GetCurrentCallStack())
+			engine.Scopestack.PopScope()
+			return result
 		} else {
 			return util.GenerateIntPrimitive(-1)
 		}
 	}
 }
 
-// TODO
 func (engine *BirEngine) ResolveBlockDeclaration(statement ast.BlockDeclarationStatement) {
 	statement.Owner = engine.ID
 
@@ -548,6 +576,10 @@ func (engine *BirEngine) ResolveExpression(raw map[string]interface{}) ast.IntPr
 		var result map[string]interface{}
 		engine.HandleError(mapstructure.Decode(raw, &result), position)
 		return engine.ResolveBlockCall(result, "")
+	case "scope_mutater_expression":
+		var result map[string]interface{}
+		engine.HandleError(mapstructure.Decode(raw, &result), position)
+		return engine.ResolveScopeMutaterExpression(result)
 	case "arithmetic":
 		return engine.ResolveArithmeticExpression(raw)
 	case "condition":
@@ -595,7 +627,7 @@ func (engine BirEngine) PushVerbs(expression ast.BlockCallExpression, block ast.
 	return result
 }
 
-// TODO
+// TODO: Check if implemented block is foreign
 func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming string) ast.IntPrimitiveExpression {
 	expression := ast.BlockCallExpression{}
 	engine.HandleError(mapstructure.Decode(raw, &expression), expression.Position)
@@ -627,7 +659,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 
 					engine.Callstack = engine.PushCallstack(Callstack{
 						Label:      expression.Name.Value,
-						Identifier: expression.Name.Value,
+						Identifier: "$" + expression.Name.Value,
 						Stack:      []interface{}{},
 					})
 					native_function_return := body(verbs, arguments)
@@ -651,8 +683,8 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 
 					local_scope := []scope.Value{}
 
-					local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
-					local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+					local_scope = append(local_scope, engine.PushArguments(expression, *implemented.Block, incoming)...)
+					local_scope = append(local_scope, engine.PushVerbs(expression, *implemented.Block, incoming)...)
 
 					for _, value := range local_scope {
 						engine.Scopestack.AddVariable(value)
@@ -662,7 +694,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 					engine.HandleError(mapstructure.Decode(implemented.Block.Body, &body), expression.Position)
 					engine.Callstack = engine.PushCallstack(Callstack{
 						Label:      result.Block.Name.Value + "->" + implemented.Block.Name.Value,
-						Identifier: result.Block.Name.Value,
+						Identifier: "$" + result.Block.Name.Value,
 						Stack:      body["program"],
 					})
 
@@ -686,7 +718,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 
 					engine.Callstack = engine.PushCallstack(Callstack{
 						Label:      expression.Name.Value,
-						Identifier: expression.Name.Value,
+						Identifier: "$" + expression.Name.Value,
 						Stack:      body.Program,
 					})
 					value := engine.ResolveCallstack(engine.GetCurrentCallStack())
@@ -728,9 +760,102 @@ func (engine *BirEngine) ResolveReferenceExpression(raw map[string]interface{}) 
 	}
 }
 
-// TODO
+func (engine BirEngine) FindUpperBlockScope() (*scope.Scope, int) {
+	selected_stack_index := -1
+
+	for i, cs := range engine.ReverseCallstack() {
+		if strings.HasPrefix(cs.Identifier, "$") {
+			selected_stack_index = i
+			break
+		}
+	}
+
+	if selected_stack_index < 0 {
+		return &scope.Scope{}, -1
+	} else {
+		selected_scope := (engine.Scopestack.Reverse())[selected_stack_index]
+		return &selected_scope, selected_stack_index
+	}
+}
+
 func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{}) ast.IntPrimitiveExpression {
-	return util.GenerateIntPrimitive(0)
+	expression := ast.ScopeMutaterExpression{}
+	engine.HandleAnonymousError(mapstructure.Decode(raw, &expression))
+
+	WriteToScope := func() ast.IntPrimitiveExpression {
+		if len(expression.Arguments) < 2 {
+			engine.Thrower.Throw("Scope mutation with 'Write' operation needs at least 2 arguments but '"+strconv.Itoa(len(expression.Arguments))+"' is given", expression.Position, engine.Callstack)
+			return util.GenerateIntPrimitive(-1)
+		}
+		arguments := []ast.IntPrimitiveExpression{}
+
+		for _, value := range expression.Arguments {
+			arguments = append(arguments, engine.ResolveExpression(value))
+		}
+
+		selected_scope, index := engine.FindUpperBlockScope()
+		selected_scope.AddVariable(scope.Value{
+			Key:   util.GenerateIdentifier("value_" + strconv.Itoa(int(arguments[0].Value))),
+			Value: arguments[1],
+			Kind:  "const",
+		})
+		engine.Scopestack.SwapAtIndex(index, *selected_scope)
+
+		return util.GenerateIntPrimitive(-1)
+	}
+
+	ReadFromScope := func() ast.IntPrimitiveExpression {
+		if len(expression.Arguments) < 1 {
+			engine.Thrower.Throw("Scope mutation with 'Read' operation needs at least 1 argument but '"+strconv.Itoa(len(expression.Arguments))+"' is given", expression.Position, engine.Callstack)
+			return util.GenerateIntPrimitive(-1)
+		}
+		arguments := []ast.IntPrimitiveExpression{}
+
+		for _, value := range expression.Arguments {
+			arguments = append(arguments, engine.ResolveExpression(value))
+		}
+
+		selected_scope, i := engine.FindUpperBlockScope()
+		var selected_value ast.IntPrimitiveExpression
+
+		if i < 0 {
+			engine.Thrower.Throw("IDK", expression.Position, engine.Callstack)
+		}
+
+		for _, value := range selected_scope.Frame {
+			if value.Key.Value == "value_"+strconv.Itoa(int(arguments[0].Value)) {
+				selected_value = value.Value
+			}
+		}
+
+		if selected_value.Type == "" {
+			engine.Thrower.Throw("Could not read index '"+strconv.Itoa(int(arguments[0].Value))+"', the value is non-existant", expression.Position, engine.Callstack)
+			return util.GenerateIntPrimitive(-1)
+		}
+		return selected_value
+	}
+
+	// TODO: Delete index from scope
+	DeleteFromScope := func() ast.IntPrimitiveExpression {
+		return util.GenerateIntPrimitive(100)
+	}
+
+	if engine.GetCurrentCallStack().Identifier == "main" {
+		engine.Thrower.Throw("Top level scope mutater expressions are not allowed", expression.Position, engine.Callstack)
+		return util.GenerateIntPrimitive(-1)
+	}
+
+	switch expression.Mutater.Value {
+	case "Write":
+		return WriteToScope()
+	case "Read":
+		return ReadFromScope()
+	case "Delete":
+		return DeleteFromScope()
+	default:
+		engine.Thrower.Throw("Unknown mutater '"+expression.Mutater.Value+"'", expression.Mutater.Position, engine.Callstack)
+		return util.GenerateIntPrimitive(1)
+	}
 }
 
 func (engine *BirEngine) ResolveConditionExpression(raw map[string]interface{}) ast.IntPrimitiveExpression {

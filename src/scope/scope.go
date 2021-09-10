@@ -125,6 +125,10 @@ func (scopestack *Scopestack) AddNativeBlock(block ast.BlockDeclarationStatement
 	scopestack.GetCurrentScope().Blocks = append(scopestack.GetCurrentScope().Blocks, block)
 }
 
+func (scopestack *Scopestack) SwapAtIndex(index int, scope Scope) {
+	scopestack.Scopes[len(scopestack.Scopes)-1-index] = scope
+}
+
 func (scopestack *Scopestack) BlockExists(key string) bool {
 	for _, scope := range scopestack.Reverse() {
 		for _, value := range scope.Blocks {
@@ -188,6 +192,10 @@ type Scope struct {
 	Foreign   bool                            `json:"foreign"`
 	Frame     []Value                         `json:"frame"`
 	Blocks    []ast.BlockDeclarationStatement `json:"blocks"`
+}
+
+func (scope *Scope) AddVariable(value Value) {
+	scope.Frame = append(scope.Frame, value)
 }
 
 type UpdateReport int
