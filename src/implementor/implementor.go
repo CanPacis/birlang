@@ -8,15 +8,22 @@ import (
 )
 
 type Implementor struct {
-	IOBuffer []byte
-	Name     string
+	IOBuffer []byte `json:"io_buffer"`
+	Name     string `json:"name"`
 }
 
-func (implementor Implementor) Interface(arguments []ast.IntPrimitiveExpression, verbs []ast.IntPrimitiveExpression) ast.IntPrimitiveExpression {
-	fmt.Println("Hello There", arguments, verbs)
-	switch verbs[0].Value {
+const (
+	StdPush = iota + 1000000
+	StdPull
+	StdRead
+	StdWrite
+)
 
-	}
+func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arguments []ast.IntPrimitiveExpression) ast.IntPrimitiveExpression {
+	fmt.Println("Hello There", verbs, arguments)
+	// switch verbs[0].Value {
+
+	// }
 	return util.GenerateIntPrimitive(-1)
 }
 
@@ -27,4 +34,12 @@ func (implementor Implementor) Push(arguments []ast.IntPrimitiveExpression) ast.
 
 func (implementor Implementor) Pull() ast.IntPrimitiveExpression {
 	return util.GenerateIntPrimitive(int64(implementor.IOBuffer[0]))
+}
+
+func (implementor Implementor) Read(arguments []ast.IntPrimitiveExpression) ast.IntPrimitiveExpression {
+	return util.GenerateIntPrimitive(-1)
+}
+
+func (implementor Implementor) Write() ast.IntPrimitiveExpression {
+	return util.GenerateIntPrimitive(-1)
 }

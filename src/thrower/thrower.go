@@ -11,18 +11,18 @@ import (
 )
 
 type Thrower struct {
-	Owner interface{}
-	Color util.Color
+	Owner interface{} `json:"owner"`
+	Color util.Color  `json:"color"`
 }
 
-func (thrower *Thrower) Throw(message string, position ast.Position) {
+func (thrower *Thrower) Throw(message string, position ast.Position, callstack interface{}) {
 	var engine map[string]interface{}
 	mapstructure.Decode(thrower.Owner, &engine)
 
 	if !engine["Anonymous"].(bool) {
 		os.Stdout.WriteString(thrower.Color.OutputRed("[ERROR]") + " " + message + " at " + thrower.Color.OutputCyan(strconv.Itoa(int(position.Line))+":"+strconv.Itoa(int(position.Col))) + " in " + thrower.Color.OutputYellow(engine["Filename"].(string)) + "\n")
 		os.Stdout.WriteString("\n" + thrower.GetSnippet(position) + "\n")
-		os.Stdout.WriteString("\nCallstack:\n\t" + thrower.GetCallstack() + "\n")
+		os.Stdout.WriteString("\nCallstack:\n\t" + thrower.GetCallstack(callstack) + "\n")
 		os.Stdout.WriteString("\nFile:\n\t" + thrower.Color.OutputRed(engine["URI"].(string)) + "\n")
 		os.Exit(1)
 	} else {
@@ -51,12 +51,12 @@ func (thrower *Thrower) GetSnippet(position ast.Position) string {
 	return result
 }
 
-func (thrower *Thrower) GetCallstack() string {
-	var engine map[string]interface{}
-	mapstructure.Decode(thrower.Owner, &engine)
+func (thrower *Thrower) GetCallstack(c interface{}) string {
+	// var engine map[string]interface{}
+	// mapstructure.Decode(thrower.Owner, &engine)
 
 	var callstack []map[string]interface{}
-	mapstructure.Decode(engine["Callstack"], &callstack)
+	mapstructure.Decode(c, &callstack)
 
 	result := []string{}
 	for _, stack := range callstack {
@@ -66,7 +66,7 @@ func (thrower *Thrower) GetCallstack() string {
 	return strings.Join(result, "\n\t")
 }
 
-func (thrower *Thrower) Warn(message string, position ast.Position) {
+func (thrower *Thrower) Warn(message string, position ast.Position, callstack interface{}) {
 	var engine map[string]interface{}
 	mapstructure.Decode(thrower.Owner, &engine)
 
@@ -75,7 +75,7 @@ func (thrower *Thrower) Warn(message string, position ast.Position) {
 			os.Stdout.WriteString(thrower.Color.OutputYellow("[WARNING]") + " " + message + " at " + thrower.Color.OutputCyan(strconv.Itoa(int(position.Line))+":"+strconv.Itoa(int(position.Col))) + " in " + thrower.Color.OutputYellow(engine["Filename"].(string)) + "\n")
 			if engine["VerbosityLevel"].(int) == 2 {
 				os.Stdout.WriteString("\n" + thrower.GetSnippet(position) + "\n")
-				os.Stdout.WriteString("\nCallstack:\n\t" + thrower.GetCallstack() + "\n")
+				os.Stdout.WriteString("\nCallstack:\n\t" + thrower.GetCallstack(callstack) + "\n")
 				os.Stdout.WriteString("\nFile:\n\t" + thrower.Color.OutputRed(engine["URI"].(string)) + "\n")
 			}
 		} else {

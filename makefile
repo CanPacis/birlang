@@ -1,5 +1,5 @@
 build_win:
-	windres -o main-res.syso res/bir.rc && go build -o bin/bir.exe -ldflags "-w" -i
+	windres -o main-res.syso res/bir.rc && go build -o bin/bir.exe -ldflags "-s -w" -i
 
 build_linux:
 	go build -o bin/bir -ldflags "-w" -i

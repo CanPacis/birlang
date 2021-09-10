@@ -2,7 +2,6 @@ package engine
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"os"
 	"os/exec"
@@ -59,7 +58,7 @@ func (engine *BirEngine) PopCallstack() []Callstack {
 
 func (engine BirEngine) HandleError(err error, position ast.Position) {
 	if err != nil {
-		engine.Thrower.Throw(err.Error()+"\nThis error is caused by an engine bug", position)
+		engine.Thrower.Throw(err.Error()+"\nThis error is caused by an engine bug", position, engine.Callstack)
 	}
 }
 
@@ -115,7 +114,7 @@ func (engine *BirEngine) Init() {
 
 				use_path := path.Join(engine.StdPath, statement.Source.Value+".bir")
 				if _, err := os.Stat(use_path); os.IsNotExist(err) {
-					engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position)
+					engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position, engine.Callstack)
 				}
 
 				use_engine := BirEngine{Path: use_path}
@@ -196,7 +195,7 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 			engine.HandleError(mapstructure.Decode(result["position"], &position), statement_position)
 
 			if engine.GetCurrentCallStack().Identifier == "main" {
-				engine.Thrower.Throw("Top level return statements are not allowed", position)
+				engine.Thrower.Throw("Top level return statements are not allowed", position, engine.Callstack)
 			}
 			engine.Callstack = engine.PopCallstack()
 			return value
@@ -208,9 +207,11 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 			engine.HandleError(mapstructure.Decode(result["position"], &position), statement_position)
 
 			if engine.GetCurrentCallStack().Identifier == "main" {
-				engine.Thrower.Throw("Top level throw statements are not allowed", position)
+				engine.Thrower.Throw("Top level throw statements are not allowed", position, engine.Callstack)
 			} else {
-				engine.Thrower.Throw("Bir process has thrown error with value '"+strconv.Itoa(int(value.Value))+"'", position)
+				engine.Thrower.Throw("Bir process has thrown error with value '"+strconv.Itoa(int(value.Value))+"'", position, engine.Callstack)
+				// v, _ := json.MarshalIndent(engine.Callstack, "", "  ")
+				// fmt.Println(string(v))
 			}
 			engine.Callstack = engine.PopCallstack()
 			return value
@@ -218,10 +219,6 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 			result := ast.BlockDeclarationStatement{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
 			engine.ResolveBlockDeclaration(result)
-		case "native_block_declaration":
-			result := ast.BlockDeclarationStatement{}
-			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
-			engine.ResolveNativeBlockDeclaration(result)
 		case "quantity_modifier_statement":
 			result := ast.QuantityModifierStatement{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
@@ -233,7 +230,7 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 		case "block_call":
 			var result map[string]interface{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
-			value := engine.ResolveBlockCall(result, false)
+			value := engine.ResolveBlockCall(result, "")
 			engine.Callstack = engine.PopCallstack()
 			return value
 		case "scope_mutater_expression":
@@ -276,11 +273,11 @@ func (engine *BirEngine) ResolveAssignStatement(statement ast.AssignStatement) {
 	case 0:
 		engine.Scopestack.UpdateVariable(statement.Left.Value, right)
 	case 1:
-		engine.Thrower.Throw("Could not assign to a variable that does not exist", statement.Position)
+		engine.Thrower.Throw("Could not assign to a variable that does not exist", statement.Position, engine.Callstack)
 	case 2:
-		engine.Thrower.Throw("Could not assign to an immutable variable", statement.Position)
+		engine.Thrower.Throw("Could not assign to an immutable variable", statement.Position, engine.Callstack)
 	case 3:
-		engine.Thrower.Throw("Could not assign to a foreign variable", statement.Position)
+		engine.Thrower.Throw("Could not assign to a foreign variable", statement.Position, engine.Callstack)
 	}
 }
 
@@ -314,11 +311,11 @@ func (engine *BirEngine) ResolveQuantityModifierStatement(statement ast.Quantity
 		case 0:
 			engine.Scopestack.UpdateVariable(statement.Statement["value"].(string), util.GenerateIntPrimitive(new_value))
 		case 1:
-			engine.Thrower.Throw("Could not modify a variable that does not exist", statement.Position)
+			engine.Thrower.Throw("Could not modify a variable that does not exist", statement.Position, engine.Callstack)
 		case 2:
-			engine.Thrower.Throw("Could not modify an immutable variable", statement.Position)
+			engine.Thrower.Throw("Could not modify an immutable variable", statement.Position, engine.Callstack)
 		case 3:
-			engine.Thrower.Throw("Could not modify a foreign variable", statement.Position)
+			engine.Thrower.Throw("Could not modify a foreign variable", statement.Position, engine.Callstack)
 		}
 	}
 }
@@ -434,13 +431,55 @@ func (engine *BirEngine) ResolveBlockDeclaration(statement ast.BlockDeclarationS
 	statement.Owner = engine.ID
 
 	if engine.Scopestack.BlockExists(statement.Name.Value) {
-		engine.Thrower.Throw("Could not redeclare an existing block", statement.Position)
+		engine.Thrower.Throw("Could not redeclare an existing block", statement.Position, engine.Callstack)
 	} else {
 		if statement.Implementing {
 			if engine.Scopestack.BlockExists(statement.Implements.Value) {
+				implemented := engine.Scopestack.FindBlock(statement.Implements.Value)
+				statement.Instance = implemented.Block.Instance
+
+				if statement.Populate != nil {
+					_type := statement.Populate.(map[string]interface{})["type"]
+
+					engine.Scopestack.PushScope(*statement.Instance.(*scope.Scope))
+					switch _type {
+					case "string":
+						var populate ast.StringPrimitiveExpression
+						engine.HandleAnonymousError(mapstructure.Decode(statement.Populate, &populate))
+
+						for i, value := range populate.Value {
+							engine.Scopestack.AddVariable(scope.Value{
+								Key:   util.GenerateIdentifier("value_" + strconv.Itoa(i)),
+								Value: util.GenerateIntPrimitive(int64(value)),
+								Kind:  "const",
+							})
+						}
+
+						if engine.Scopestack.VariableExists("index") {
+							engine.Scopestack.UpdateVariable("index", util.GenerateIntPrimitive(int64(len(populate.Value))))
+						}
+					case "array":
+						var populate ast.ArrayPrimitiveExpression
+						engine.HandleAnonymousError(mapstructure.Decode(statement.Populate, &populate))
+
+						for i, value := range populate.Values {
+							v := engine.ResolveExpression(value)
+							engine.Scopestack.AddVariable(scope.Value{
+								Key:   util.GenerateIdentifier("value_" + strconv.Itoa(i)),
+								Value: v,
+								Kind:  "const",
+							})
+						}
+
+						if engine.Scopestack.VariableExists("index") {
+							engine.Scopestack.UpdateVariable("index", util.GenerateIntPrimitive(int64(len(populate.Values))))
+						}
+					}
+					statement.Instance = engine.Scopestack.PopScope()
+				}
 
 			} else {
-				engine.Thrower.Throw("Could not implement '"+statement.Implements.Value+"', block is non-existant", statement.Implements.Position)
+				engine.Thrower.Throw("Could not implement '"+statement.Implements.Value+"', block is non-existant", statement.Implements.Position, engine.Callstack)
 			}
 		} else {
 			var body ast.BlockBody
@@ -462,24 +501,13 @@ func (engine *BirEngine) ResolveBlockDeclaration(statement ast.BlockDeclarationS
 	}
 }
 
-// TODO
-func (engine *BirEngine) ResolveNativeBlockDeclaration(statement ast.BlockDeclarationStatement) {
-	statement.Owner = engine.ID
-
-	// if engine.Scopestack.BlockExists(statement.Name.Value) {
-	// 	engine.Thrower.Throw("Could not redeclare an existing block", statement.Position)
-	// } else {
-	// 	engine.Scopestack.AddBlock(statement)
-	// }
-}
-
 func (engine *BirEngine) ResolveVariableDeclaration(statement ast.VariableDeclarationStatement) {
 	key := statement.Left
 	value := engine.ResolveExpression(statement.Right)
 
 	variable := engine.Scopestack.FindVariable(key.Value)
 	if engine.Scopestack.VariableExists(key.Value) && !variable.OuterScope {
-		engine.Thrower.Throw("Could not redeclare an existing variable", statement.Position)
+		engine.Thrower.Throw("Could not redeclare an existing variable", statement.Position, engine.Callstack)
 	} else {
 		engine.Scopestack.AddVariable(scope.Value{Key: key, Value: value, Kind: statement.Kind})
 	}
@@ -498,7 +526,7 @@ func (engine *BirEngine) ResolveExpression(raw map[string]interface{}) ast.IntPr
 	case "block_call":
 		var result map[string]interface{}
 		engine.HandleError(mapstructure.Decode(raw, &result), position)
-		return engine.ResolveBlockCall(result, false)
+		return engine.ResolveBlockCall(result, "")
 	case "arithmetic":
 		return engine.ResolveArithmeticExpression(raw)
 	case "condition":
@@ -510,7 +538,7 @@ func (engine *BirEngine) ResolveExpression(raw map[string]interface{}) ast.IntPr
 	}
 }
 
-func (engine BirEngine) PushArguments(expression ast.BlockCallExpression, block ast.BlockDeclarationStatement) []scope.Value {
+func (engine BirEngine) PushArguments(expression ast.BlockCallExpression, block ast.BlockDeclarationStatement, incoming string) []scope.Value {
 	result := []scope.Value{}
 
 	if len(expression.Arguments) == len(block.Arguments) {
@@ -519,7 +547,7 @@ func (engine BirEngine) PushArguments(expression ast.BlockCallExpression, block 
 			result = append(result, scope.Value{Key: argument, Value: value, Kind: "const"})
 		}
 	} else {
-		engine.Thrower.Warn("Expected "+strconv.Itoa(len(block.Arguments))+" argument(s), found "+strconv.Itoa(len(expression.Arguments))+" while calling '"+expression.Name.Value+"'", expression.Position)
+		engine.Thrower.Warn("Expected "+strconv.Itoa(len(block.Arguments))+" argument(s), found "+strconv.Itoa(len(expression.Arguments))+" while calling '"+expression.Name.Value+"'", expression.Position, engine.Callstack)
 		for _, argument := range block.Arguments {
 			result = append(result, scope.Value{Key: argument, Value: util.GenerateIntPrimitive(-1), Kind: "const"})
 		}
@@ -528,7 +556,7 @@ func (engine BirEngine) PushArguments(expression ast.BlockCallExpression, block 
 	return result
 }
 
-func (engine BirEngine) PushVerbs(expression ast.BlockCallExpression, block ast.BlockDeclarationStatement) []scope.Value {
+func (engine BirEngine) PushVerbs(expression ast.BlockCallExpression, block ast.BlockDeclarationStatement, incoming string) []scope.Value {
 	result := []scope.Value{}
 
 	if len(expression.Verbs) == len(block.Verbs) {
@@ -537,7 +565,7 @@ func (engine BirEngine) PushVerbs(expression ast.BlockCallExpression, block ast.
 			result = append(result, scope.Value{Key: verb, Value: value, Kind: "const"})
 		}
 	} else {
-		engine.Thrower.Warn("Expected "+strconv.Itoa(len(block.Verbs))+" verb(s), found "+strconv.Itoa(len(expression.Verbs))+" while calling '"+expression.Name.Value+"'", expression.Position)
+		engine.Thrower.Warn("Expected "+strconv.Itoa(len(block.Verbs))+" verb(s), found "+strconv.Itoa(len(expression.Verbs))+" while calling '"+expression.Name.Value+"'", expression.Position, engine.Callstack)
 		for _, verb := range block.Verbs {
 			result = append(result, scope.Value{Key: verb, Value: util.GenerateIntPrimitive(-1), Kind: "const"})
 		}
@@ -547,7 +575,7 @@ func (engine BirEngine) PushVerbs(expression ast.BlockCallExpression, block ast.
 }
 
 // TODO
-func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming bool) ast.IntPrimitiveExpression {
+func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming string) ast.IntPrimitiveExpression {
 	expression := ast.BlockCallExpression{}
 	engine.HandleError(mapstructure.Decode(raw, &expression), expression.Position)
 
@@ -556,24 +584,21 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming b
 
 		if result.Foreign {
 			owner := engine.FindOwner(result.Block.Owner, expression)
-			fmt.Printf("Block is foreign %s is calling the block...\n", owner.ID)
-			// owner.ResolveBlockCall(raw, true)
+			owner.ResolveBlockCall(raw, owner.ID)
 			return util.GenerateIntPrimitive(-1)
 		} else {
 			if result.Block.Native {
 				var body ast.NativeFunction
 				engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
-				argument_variables := engine.PushArguments(expression, *result.Block)
-				verb_variables := engine.PushVerbs(expression, *result.Block)
 
 				arguments := []ast.IntPrimitiveExpression{}
 				verbs := []ast.IntPrimitiveExpression{}
 
-				for _, value := range argument_variables {
-					arguments = append(arguments, value.Value)
+				for _, argument := range expression.Arguments {
+					arguments = append(arguments, engine.ResolveExpression(argument))
 				}
-				for _, value := range verb_variables {
-					verbs = append(verbs, value.Value)
+				for _, verb := range expression.Verbs {
+					verbs = append(verbs, engine.ResolveExpression(verb))
 				}
 
 				engine.Callstack = engine.PushCallstack(Callstack{
@@ -581,11 +606,33 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming b
 					Identifier: expression.Name.Value,
 					Stack:      []interface{}{},
 				})
-				fmt.Println(argument_variables, verb_variables)
-				return body(arguments, verbs)
+				return body(verbs, arguments)
 			}
 			if result.Block.Implementing {
-				return util.GenerateIntPrimitive(-1)
+				implemented := engine.Scopestack.FindBlock(result.Block.Implements.Value)
+				instance := result.Block.Instance.(*scope.Scope)
+				engine.Scopestack.PushScope(*instance)
+
+				local_scope := []scope.Value{}
+
+				local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
+				local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+
+				for _, value := range local_scope {
+					engine.Scopestack.AddVariable(value)
+				}
+
+				var body map[string][]interface{}
+				engine.HandleError(mapstructure.Decode(implemented.Block.Body, &body), expression.Position)
+				engine.Callstack = engine.PushCallstack(Callstack{
+					Label:      result.Block.Name.Value + "->" + implemented.Block.Name.Value,
+					Identifier: result.Block.Name.Value,
+					Stack:      body["program"],
+				})
+
+				value := engine.ResolveCallstack(engine.GetCurrentCallStack())
+				engine.Scopestack.PopScope()
+				return value
 			} else {
 				var body ast.BlockBody
 				engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
@@ -594,8 +641,8 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming b
 
 				local_scope := []scope.Value{}
 
-				local_scope = append(local_scope, engine.PushArguments(expression, *result.Block)...)
-				local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block)...)
+				local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
+				local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
 
 				for _, value := range local_scope {
 					engine.Scopestack.AddVariable(value)
@@ -612,7 +659,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming b
 			}
 		}
 	} else {
-		engine.Thrower.Throw("Could not find block '"+expression.Name.Value+"'", expression.Position)
+		engine.Thrower.Throw("Could not find block '"+expression.Name.Value+"'", expression.Position, engine.Callstack)
 		return util.GenerateIntPrimitive(-1)
 	}
 }
@@ -628,7 +675,7 @@ func (engine *BirEngine) ResolveReferenceExpression(raw map[string]interface{}) 
 		}
 		return result.Value.Value
 	} else {
-		engine.Thrower.Throw("Could not find variable '"+expression.Value+"' in the frame", expression.Position)
+		engine.Thrower.Throw("Could not find variable '"+expression.Value+"' in the frame", expression.Position, engine.Callstack)
 		return util.GenerateIntPrimitive(-1)
 	}
 }
@@ -711,7 +758,7 @@ func (engine BirEngine) FindOwner(id string, expression ast.BlockCallExpression)
 	if owner != nil {
 		return owner
 	} else {
-		engine.Thrower.Throw("Could not find block '"+expression.Name.Value+"'", expression.Position)
+		engine.Thrower.Throw("Could not find block '"+expression.Name.Value+"'", expression.Position, engine.Callstack)
 		return owner
 	}
 }

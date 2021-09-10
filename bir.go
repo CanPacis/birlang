@@ -12,12 +12,18 @@ func main() {
 		instance := engine.NewEngine(os.Args[1], false, false, 0)
 		instance.Run()
 
-		// v, _ := json.MarshalIndent(instance.GetCurrentScope(), "", "  ")
+		// v, _ := json.MarshalIndent(instance.GetCurrentScope().Frame, "", "  ")
 		// fmt.Println(string(v))
+		// for _, block := range instance.GetCurrentScope().Blocks {
+		// 	fmt.Printf("%+v\n", block.Instance)
+		// }
+
 	} else {
-		repl_caret := "[BIR] "
-		instance := engine.NewEngine("", true, false, 0)
+		repl_caret := "> "
+		instance := engine.NewEngine("", true, false, 1)
 		scanner := bufio.NewScanner(os.Stdin)
+		os.Stdout.WriteString("Bir 0.1.0\n")
+		os.Stdout.WriteString("Exit using ctrl+c\n")
 		os.Stdout.WriteString(repl_caret)
 
 		for scanner.Scan() {

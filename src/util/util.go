@@ -55,7 +55,7 @@ func GenerateNativeFunction(name string, body ast.NativeFunction) ast.BlockDecla
 		Arguments:    []ast.Identifier{},
 		Implementing: false,
 		Implements:   ast.Identifier{},
-		Popluate:     nil,
+		Populate:     nil,
 		Position:     ast.Position{Line: 1, Col: 0},
 		Instance:     nil,
 		Body:         body,
@@ -75,11 +75,11 @@ func UUID() string {
 }
 
 type Color struct {
-	Red     string
-	Yellow  string
-	Cyan    string
-	Grey    string
-	Default string
+	Red     string `json:"red"`
+	Yellow  string `json:"yellow"`
+	Cyan    string `json:"cyan"`
+	Grey    string `json:"grey"`
+	Default string `json:"default"`
 }
 
 func NewColor(colored bool) Color {

@@ -80,7 +80,7 @@ func (scopestack *Scopestack) UpdateVariable(key string, value ast.IntPrimitiveE
 		}
 	}
 
-	scopestack.Scopes[i].Frame[j].Value = value
+	scopestack.Reverse()[i].Frame[j].Value = value
 }
 
 func (scopestack *Scopestack) VariableExists(key string) bool {

@@ -37,10 +37,10 @@ type BlockDeclarationStatement struct {
 	Name         Identifier   `json:"name"`
 	Verbs        []Identifier `json:"verbs"`
 	Arguments    []Identifier `json:"arguments"`
-	Body         interface{}  `json:"body"`
+	Body         interface{}  `json:"body,omitempty"`
 	Implementing bool         `json:"implementing"`
 	Implements   Identifier   `json:"implements"`
-	Popluate     interface{}  `json:"popluate"`
+	Populate     interface{}  `json:"populate"`
 	Position     Position     `json:"position"`
 	Instance     interface{}  `json:"instance"`
 	Native       bool         `json:"native"`
@@ -190,10 +190,10 @@ type IntPrimitiveExpression struct {
 }
 
 type ArrayPrimitiveExpression struct {
-	Operation string       `json:"operation"`
-	Type      string       `json:"type"`
-	Values    []Expression `json:"values"`
-	Position  Position     `json:"position"`
+	Operation string                   `json:"operation"`
+	Type      string                   `json:"type"`
+	Values    []map[string]interface{} `json:"values"`
+	Position  Position                 `json:"position"`
 }
 
 type Position struct {

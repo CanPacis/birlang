@@ -1,13 +1,8 @@
-let a = 50
-
-add:test [a, b] {
+add [] {
   init {
-    let index = a + 1
+    let index = 0
   }
-
-  return test + index
 }
 
-let b = add:10 ()
-
-bir (4,5,6)
+toplam implements add {"Hi"}
+t implements add {[10, 20, 30, 40]}
