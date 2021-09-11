@@ -31,13 +31,20 @@ type VariableDeclarationStatement struct {
 	Position  Position               `json:"position"`
 }
 
+type NamespaceDeclarationStatement struct {
+	Operation string                   `json:"operation"`
+	Name      Identifier               `json:"name"`
+	Body      []map[string]interface{} `json:"body"`
+	Position  Position                 `json:"position"`
+}
+
 type BlockDeclarationStatement struct {
 	Operation    string       `json:"operation"`
 	Owner        string       `json:"owner"`
 	Name         Identifier   `json:"name"`
 	Verbs        []Identifier `json:"verbs"`
 	Arguments    []Identifier `json:"arguments"`
-	Body         interface{}  `json:"body,omitempty"`
+	Body         interface{}  `json:"body"`
 	Implementing bool         `json:"implementing"`
 	Implements   Identifier   `json:"implements"`
 	Populate     interface{}  `json:"populate"`
@@ -110,7 +117,7 @@ type ThrowStatement struct {
 
 type AssignStatement struct {
 	Operation string                 `json:"operation"`
-	Left      Identifier             `json:"leftomitemptyomitempty"`
+	Left      Identifier             `json:"left"`
 	Right     map[string]interface{} `json:"right"`
 	Position  Position               `json:"position"`
 }
@@ -131,6 +138,13 @@ type BlockBody struct {
 type Expression struct {
 	Operation string   `json:"operation"`
 	Position  Position `json:"position"`
+}
+
+type NamespaceIndexerExpression struct {
+	Operation string     `json:"operation"`
+	Namespace Identifier `json:"namespace"`
+	Index     Identifier `json:"index"`
+	Position  Position   `json:"position"`
 }
 
 type ConditionExpression struct {

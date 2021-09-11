@@ -1,5 +1,7 @@
 use "std"
-use "console"
 
-message implements console {"Hello, World!"}
-message:out ()
+test:verb [] {
+  return verb
+}
+
+let d = test:std.write ()

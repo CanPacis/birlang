@@ -38,6 +38,7 @@ func ApplyConfig(options map[string]interface{}, instance *BirEngine) {
 type BirEngine struct {
 	ID                   string                    `json:"id"`
 	Anonymous            bool                      `json:"anonymous"`
+	NamespaceAllowed     bool                      `json:"namespace_allowed"`
 	Path                 string                    `json:"path"`
 	URI                  string                    `json:"uri"`
 	Filename             string                    `json:"filename"`
@@ -107,6 +108,11 @@ func (engine *BirEngine) Init() {
 	engine.Thrower = thrower.Thrower{Owner: engine, Color: util.NewColor(engine.ColoredOutput)}
 	cwd, _ := os.Getwd()
 	engine.StdPath = path.Join(cwd, "std")
+	engine.Scopestack.PushScope(scope.Scope{})
+
+	for _, i := range engine.Implementors {
+		engine.Scopestack.AddBlock(util.GenerateNativeFunction(i.Name, i.Interface))
+	}
 
 	if !engine.Anonymous {
 		dir, file := path.Split(engine.Path)
@@ -118,7 +124,7 @@ func (engine *BirEngine) Init() {
 
 		engine.Content = string(raw)
 		result := ast.ParserResult{}
-		out, err := exec.Command("C:\\Users\\tmwwd\\go\\src\\bir\\bin\\parser\\bir-parser-win.exe", string(engine.Content)).Output()
+		out, err := exec.Command("node", "C:\\Users\\tmwwd\\go\\src\\birlang\\bin\\parser\\parser", string(engine.Content)).Output()
 		engine.HandleAnonymousError(err)
 
 		json.Unmarshal(out, &result)
@@ -128,11 +134,6 @@ func (engine *BirEngine) Init() {
 			engine.Thrower.ThrowAnonymous(content.Message)
 		} else {
 			engine.HandleAnonymousError(mapstructure.Decode(result.Content, &engine.Parsed))
-			engine.Scopestack.PushScope(scope.Scope{})
-
-			for _, i := range engine.Implementors {
-				engine.Scopestack.AddBlock(util.GenerateNativeFunction(i.Name, i.Interface))
-			}
 
 			if engine.Parsed["program"] != nil {
 				engine.Callstack = engine.PushCallstack(Callstack{Label: "main", Identifier: "main", Stack: engine.Parsed["program"].([]interface{})})
@@ -140,35 +141,41 @@ func (engine *BirEngine) Init() {
 				engine.Thrower.ThrowAnonymous("Syntax error ¯\\_(ツ)_/¯. I actually don't know what's wrong with this parser")
 			}
 
-			for _, use := range engine.Parsed["imports"].([]interface{}) {
-				var statement ast.UseStatement
-				engine.HandleAnonymousError(mapstructure.Decode(use, &statement))
-
-				use_path := path.Join(engine.StdPath, statement.Source.Value+".bir")
-				if _, err := os.Stat(use_path); os.IsNotExist(err) {
-					engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position, engine.Callstack)
-				}
-
-				use_engine := BirEngine{Path: use_path}
-				use_engine.Init()
-				use_engine.Run()
-
-				s := use_engine.Scopestack.GetCurrentScope()
-				use_scope := scope.Scope{}
-				use_scope.Blocks = s.Blocks
-				use_scope.Frame = s.Frame
-				use_scope.Foreign = true
-				use_scope.Immutable = true
-				engine.Scopestack.ShiftScope(use_scope)
-				engine.Uses = append(engine.Uses, use_engine)
-			}
+			engine.AddImports(engine.Parsed)
 		}
+	}
+}
+
+func (engine *BirEngine) AddImports(stack map[string]interface{}) {
+	for _, use := range stack["imports"].([]interface{}) {
+		var statement ast.UseStatement
+		engine.HandleAnonymousError(mapstructure.Decode(use, &statement))
+
+		use_path := path.Join(engine.StdPath, statement.Source.Value+".bir")
+		if _, err := os.Stat(use_path); os.IsNotExist(err) {
+			engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position, engine.Callstack)
+		}
+
+		use_engine := BirEngine{Path: use_path}
+		use_engine.Init()
+		use_engine.NamespaceAllowed = true
+		use_engine.Run()
+
+		s := use_engine.Scopestack.GetCurrentScope()
+		use_scope := scope.Scope{}
+		use_scope.Blocks = s.Blocks
+		use_scope.Frame = s.Frame
+		use_scope.Foreign = true
+		use_scope.Immutable = true
+		engine.Scopestack.ShiftScope(use_scope)
+		engine.Scopestack.Namespaces = append(engine.Scopestack.Namespaces, use_engine.Scopestack.Namespaces...)
+		engine.Uses = append(engine.Uses, use_engine)
 	}
 }
 
 func (engine *BirEngine) Feed(input string) string {
 	result := ast.ParserResult{}
-	out, err := exec.Command("C:\\Users\\tmwwd\\go\\src\\bir\\bin\\parser\\bir-parser-win.exe", input).Output()
+	out, err := exec.Command("node", "C:\\Users\\tmwwd\\go\\src\\birlang\\bin\\parser\\parser.js", input).Output()
 	engine.HandleAnonymousError(err)
 	json.Unmarshal(out, &result)
 
@@ -180,6 +187,9 @@ func (engine *BirEngine) Feed(input string) string {
 		var stack map[string]interface{}
 		engine.HandleAnonymousError(mapstructure.Decode(result.Content, &stack))
 		engine.Scopestack.PushScope(scope.Scope{})
+
+		engine.AddImports(stack)
+
 		if stack["program"] != nil {
 			engine.Callstack = engine.PushCallstack(Callstack{Label: "main", Identifier: "main", Stack: stack["program"].([]interface{})})
 			result := engine.ResolveCallstack(engine.GetCurrentCallStack())
@@ -251,6 +261,14 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 			result := ast.BlockDeclarationStatement{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
 			engine.ResolveBlockDeclaration(result)
+		case "namespace_declaration":
+			result := ast.NamespaceDeclarationStatement{}
+			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
+			engine.ResolveNamespaceDeclaration(result)
+		case "namespace_indexer":
+			var result map[string]interface{}
+			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
+			engine.ResolveNamespaceIndexerExpression(result)
 		case "quantity_modifier_statement":
 			result := ast.QuantityModifierStatement{}
 			engine.HandleError(mapstructure.Decode(statement, &result), statement_position)
@@ -576,6 +594,10 @@ func (engine *BirEngine) ResolveExpression(raw map[string]interface{}) ast.IntPr
 		var result map[string]interface{}
 		engine.HandleError(mapstructure.Decode(raw, &result), position)
 		return engine.ResolveBlockCall(result, "")
+	case "namespace_indexer":
+		var result map[string]interface{}
+		engine.HandleError(mapstructure.Decode(raw, &result), position)
+		return engine.ResolveNamespaceIndexerExpression(result)
 	case "scope_mutater_expression":
 		var result map[string]interface{}
 		engine.HandleError(mapstructure.Decode(raw, &result), position)
@@ -858,6 +880,43 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 	}
 }
 
+// TODO
+func (engine *BirEngine) ResolveNamespaceDeclaration(statement ast.NamespaceDeclarationStatement) {
+	if engine.NamespaceAllowed {
+		engine.Scopestack.PushScope(scope.Scope{})
+		for _, raw := range statement.Body {
+			var sub_statement ast.VariableDeclarationStatement
+			engine.HandleError(mapstructure.Decode(raw, &sub_statement), statement.Position)
+			engine.ResolveVariableDeclaration(sub_statement)
+		}
+		namespace_scope := engine.Scopestack.PopScope()
+		engine.Scopestack.PushNamespace(statement.Name.Value, *namespace_scope)
+	} else {
+		engine.Thrower.Throw("Namespaces are not allowed in this file", statement.Position, engine.Callstack)
+	}
+}
+
+// TODO
+func (engine *BirEngine) ResolveNamespaceIndexerExpression(raw map[string]interface{}) ast.IntPrimitiveExpression {
+	expression := ast.NamespaceIndexerExpression{}
+	engine.HandleAnonymousError(mapstructure.Decode(raw, &expression))
+	namespace_exists := engine.Scopestack.NamespaceExists(expression.Namespace.Value)
+
+	if namespace_exists {
+		value := engine.Scopestack.FindInNamespace(expression.Namespace.Value, expression.Index.Value)
+
+		if value.Value.Type != "" {
+			return value.Value
+		}
+
+		engine.Thrower.Throw("Could not find variable '"+expression.Index.Value+"' in the namespace '"+expression.Namespace.Value+"'", expression.Position, engine.Callstack)
+		return util.GenerateIntPrimitive(-1)
+	}
+
+	engine.Thrower.Throw("Could not find namespace '"+expression.Namespace.Value+"'", expression.Position, engine.Callstack)
+	return util.GenerateIntPrimitive(-1)
+}
+
 func (engine *BirEngine) ResolveConditionExpression(raw map[string]interface{}) ast.IntPrimitiveExpression {
 	left := engine.ResolveExpression(raw["left"].(map[string]interface{}))
 	right := engine.ResolveExpression(raw["right"].(map[string]interface{}))
@@ -884,7 +943,7 @@ func (engine *BirEngine) ResolveConditionExpression(raw map[string]interface{}) 
 	case "not_greater_than_equals":
 		return util.GenerateIntFromBool(!(left.Value >= right.Value))
 	default:
-		return util.GenerateIntPrimitive(-10)
+		return util.GenerateIntPrimitive(-1)
 	}
 }
 
@@ -938,11 +997,12 @@ func (engine BirEngine) FindOwner(id string, expression ast.BlockCallExpression)
 
 func NewEngine(path string, anonymous bool, colored_output bool, verbosity_level int) BirEngine {
 	engine := BirEngine{
-		Path:           path,
-		Anonymous:      anonymous,
-		ColoredOutput:  colored_output,
-		VerbosityLevel: verbosity_level,
-		Implementors:   []implementor.Implementor{{Name: "bir"}},
+		Path:             path,
+		NamespaceAllowed: false,
+		Anonymous:        anonymous,
+		ColoredOutput:    colored_output,
+		VerbosityLevel:   verbosity_level,
+		Implementors:     []implementor.Implementor{{Name: "bir"}},
 	}
 	return engine
 }

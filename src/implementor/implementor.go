@@ -1,6 +1,8 @@
 package implementor
 
 import (
+	"bufio"
+	"fmt"
 	"os"
 
 	"github.com/canpacis/birlang/src/ast"
@@ -20,6 +22,7 @@ const (
 	StdWrite
 	StdOut
 	StdFile
+	StdDone
 )
 
 func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
@@ -50,11 +53,34 @@ func (implementor Implementor) Push(arguments []ast.IntPrimitiveExpression) ast.
 }
 
 func (implementor Implementor) Pull() ast.NativeFunctionReturn {
-	return util.GenerateNativeFunctionReturn(false, false, "", -100)
+	var element int64
+	fmt.Println(io_buffer)
+
+	if len(io_buffer) > 0 {
+		element = int64(io_buffer[0])
+		io_buffer = io_buffer[1:]
+	} else {
+		element = StdDone
+	}
+	fmt.Println("Pulled value: ", element)
+	return util.GenerateNativeFunctionReturn(false, false, "", element)
 }
 
 func (implementor Implementor) Read(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
-	return util.GenerateNativeFunctionReturn(false, false, "", -1)
+	if len(arguments) > 0 {
+		switch arguments[0].Value {
+		case StdOut:
+			scanner := bufio.NewScanner(os.Stdin)
+			scanner.Scan()
+			text := scanner.Text()
+			io_buffer = append(io_buffer, []byte(text)...)
+		case StdFile:
+		}
+		io_buffer = []byte{}
+		return util.GenerateNativeFunctionReturn(false, false, "", -1)
+	} else {
+		return util.GenerateNativeFunctionReturn(true, false, "Native 'bir' block's 'read' verb needs at least 1 argument", -1)
+	}
 }
 
 func (implementor Implementor) Write(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {

@@ -5,7 +5,8 @@ import (
 )
 
 type Scopestack struct {
-	Scopes []Scope `json:"scopes"`
+	Scopes     []Scope     `json:"scopes"`
+	Namespaces []Namespace `json:"namespaces"`
 }
 
 func (scopestack *Scopestack) Reverse() []Scope {
@@ -26,6 +27,10 @@ func (scopestack *Scopestack) ShiftScope(scope Scope) {
 
 func (scopestack *Scopestack) PushScope(scope Scope) {
 	scopestack.Scopes = append(scopestack.Scopes, scope)
+}
+
+func (scopestack *Scopestack) PushNamespace(name string, scope Scope) {
+	scopestack.Namespaces = append(scopestack.Namespaces, Namespace{Name: name, Scope: scope})
 }
 
 func (scopestack *Scopestack) UnshiftScope() {
@@ -165,6 +170,43 @@ func (scopestack *Scopestack) FindBlock(key string) ScopeBlock {
 
 func (scopestack *Scopestack) GetCurrentScope() *Scope {
 	return &scopestack.Scopes[len(scopestack.Scopes)-1]
+}
+
+func (scopestack *Scopestack) NamespaceExists(name string) bool {
+	var selected_namespace Namespace
+
+	for _, namespace := range scopestack.Namespaces {
+		if namespace.Name == name {
+			selected_namespace = namespace
+		}
+	}
+
+	return !(selected_namespace.Name == "")
+}
+
+func (scopestack *Scopestack) FindInNamespace(name string, index string) *Value {
+	var selected_namespace Namespace
+
+	for _, namespace := range scopestack.Namespaces {
+		if namespace.Name == name {
+			selected_namespace = namespace
+		}
+	}
+
+	var selected_value Value
+
+	for _, value := range selected_namespace.Scope.Frame {
+		if value.Key.Value == index {
+			selected_value = value
+		}
+	}
+
+	return &selected_value
+}
+
+type Namespace struct {
+	Name  string `json:"name"`
+	Scope Scope  `json:"scope"`
 }
 
 type ScopeBlock struct {

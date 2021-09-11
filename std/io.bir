@@ -1,0 +1,33 @@
+use "std"
+const out = 1000100
+const in = 1000101
+
+console:verb [value] {
+  init {
+    let index = 0
+  }
+
+  switch verb {
+    case out {
+      for index as i {
+        bir:std_push ([Read i])
+      }
+      bir:std_write (std_out)
+    } case std_push {
+      [Write index, value]
+      index++
+    } case in {
+      bir:std_read (std_out)
+      let done = -1
+      while done !== std_done {
+        let v = bir:std_pull ()
+        if v == std_done {
+          done = std_done
+        }else {
+          [Write index, v]
+          index++
+        }
+      }
+    }
+  }
+}
