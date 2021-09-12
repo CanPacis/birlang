@@ -28,7 +28,7 @@ func main() {
 		instance := engine.NewEngine("", true, false, 1)
 		instance.Init()
 		scanner := bufio.NewScanner(os.Stdin)
-		os.Stdout.WriteString("Bir v0.1.0\n")
+		os.Stdout.WriteString("Bir v0.1.1\n")
 		os.Stdout.WriteString("Exit using ctrl+c\n")
 		os.Stdout.WriteString(repl_caret)
 

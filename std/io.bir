@@ -5,6 +5,10 @@ console:verb [value] {
     let index = 0
   }
 
+  if 1 {
+    throw index
+  }
+
   switch verb {
     case util.out {
       for index as i {
@@ -23,8 +27,8 @@ console:verb [value] {
         if v == util.done {
           done = util.done
         }else {
-          [Write index, v]
           index++
+          [Write index, v]
         }
       }
     }

@@ -40,6 +40,7 @@ type BirEngine struct {
 	ID                   string                    `json:"id"`
 	Anonymous            bool                      `json:"anonymous"`
 	NamespaceAllowed     bool                      `json:"namespace_allowed"`
+	ScopeMutaterAllowed  bool                      `json:"scope_mutater_allowed"`
 	Path                 string                    `json:"path"`
 	URI                  string                    `json:"uri"`
 	Filename             string                    `json:"filename"`
@@ -103,9 +104,10 @@ func (engine BirEngine) HandleAnonymousError(err error) {
 }
 
 func (engine *BirEngine) Init() {
+	engine.Path = strings.ReplaceAll(engine.Path, "\\", "/")
 	engine.URI = "file://" + engine.Path
 	engine.ID = util.UUID()
-	engine.MaximumCallstackSize = 10
+	engine.MaximumCallstackSize = 8000
 	engine.Thrower = thrower.Thrower{Owner: engine, Color: util.NewColor(engine.ColoredOutput)}
 	cwd, _ := os.Getwd()
 	engine.StdPath = path.Join(cwd, "std")
@@ -137,7 +139,7 @@ func (engine *BirEngine) Init() {
 			engine.HandleAnonymousError(mapstructure.Decode(result.Content, &engine.Parsed))
 
 			if engine.Parsed["program"] != nil {
-				engine.Callstack = engine.PushCallstack(Callstack{Label: "main", Identifier: "main", Stack: engine.Parsed["program"].([]interface{})})
+				engine.Callstack = engine.PushCallstack(Callstack{Label: "main [" + engine.Filename + "]", Identifier: "main", Stack: engine.Parsed["program"].([]interface{})})
 			} else {
 				engine.Thrower.ThrowAnonymous("Syntax error ¯\\_(ツ)_/¯. I actually don't know what's wrong with this parser")
 			}
@@ -147,6 +149,7 @@ func (engine *BirEngine) Init() {
 	}
 }
 
+// TODO: Unknown prefix throws error and exits in REPL
 func (engine *BirEngine) AddImports(stack map[string]interface{}) {
 	var is_standard bool
 	for _, use := range stack["imports"].([]interface{}) {
@@ -171,11 +174,12 @@ func (engine *BirEngine) AddImports(stack map[string]interface{}) {
 			engine.Thrower.Throw("Uknown use prefix '"+strings.Split(statement.Source.Value, ":")[0]+"'", statement.Position, engine.Callstack)
 		}
 
-		use_engine := BirEngine{Path: use_path}
+		use_engine := NewEngine(use_path, engine.Anonymous, engine.ColoredOutput, engine.VerbosityLevel)
 		use_engine.Implementors = engine.Implementors
 		use_engine.Init()
 		if is_standard {
 			use_engine.NamespaceAllowed = true
+			use_engine.ScopeMutaterAllowed = true
 		}
 		use_engine.Run()
 
@@ -209,7 +213,7 @@ func (engine *BirEngine) Feed(input string) string {
 		engine.AddImports(stack)
 
 		if stack["program"] != nil {
-			engine.Callstack = engine.PushCallstack(Callstack{Label: "main", Identifier: "main", Stack: stack["program"].([]interface{})})
+			engine.Callstack = engine.PushCallstack(Callstack{Label: "main [" + engine.Filename + "]", Identifier: "main", Stack: stack["program"].([]interface{})})
 			result := engine.ResolveCallstack(engine.GetCurrentCallStack())
 			return strconv.Itoa(int(result.Value))
 		} else {
@@ -680,6 +684,8 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 				instance := result.Block.Instance.(*scope.Scope)
 				owner.Scopestack.PushScope(engine.GetCurrentScope())
 				owner.Scopestack.PushScope(*instance)
+				old_stack := owner.Callstack
+				owner.Callstack = append(owner.Callstack, engine.Callstack...)
 
 				local_scope := []scope.Value{}
 
@@ -693,6 +699,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 				value := owner.ResolveBlockCall(raw, owner.ID)
 				owner.Scopestack.PopScope()
 				owner.Scopestack.PopScope()
+				owner.Callstack = old_stack
 				return value
 			} else {
 				if result.Block.Native {
@@ -736,6 +743,9 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 						owner := engine.FindOwner(implemented.Block.Owner, expression)
 						owner.Scopestack.PushScope(engine.GetCurrentScope())
 						owner.Scopestack.PushScope(*instance)
+						old_stack := owner.Callstack
+						owner.Callstack = append(owner.Callstack, engine.Callstack...)
+
 						raw["name"].(map[string]interface{})["value"] = implemented.Block.Name.Value
 
 						local_scope := []scope.Value{}
@@ -750,6 +760,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 						value := owner.ResolveBlockCall(raw, owner.ID)
 						owner.Scopestack.PopScope()
 						owner.Scopestack.PopScope()
+						owner.Callstack = old_stack
 						return value
 					}
 
@@ -916,24 +927,28 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 	}
 
 	if engine.GetCurrentCallStack().Identifier == "main" {
-		engine.Thrower.Throw("Top level scope mutater expressions are not allowed", expression.Position, engine.Callstack)
+		engine.Thrower.Throw("Top level scope mutations are not allowed", expression.Position, engine.Callstack)
 		return util.GenerateIntPrimitive(-1)
 	}
 
-	switch expression.Mutater.Value {
-	case "Write":
-		return WriteToScope()
-	case "Read":
-		return ReadFromScope()
-	case "Delete":
-		return DeleteFromScope()
-	default:
-		engine.Thrower.Throw("Unknown mutater '"+expression.Mutater.Value+"'", expression.Mutater.Position, engine.Callstack)
-		return util.GenerateIntPrimitive(1)
+	if engine.ScopeMutaterAllowed {
+		switch expression.Mutater.Value {
+		case "Write":
+			return WriteToScope()
+		case "Read":
+			return ReadFromScope()
+		case "Delete":
+			return DeleteFromScope()
+		default:
+			engine.Thrower.Throw("Unknown mutater '"+expression.Mutater.Value+"'", expression.Mutater.Position, engine.Callstack)
+			return util.GenerateIntPrimitive(1)
+		}
+	} else {
+		engine.Thrower.Throw("Scope mutations are not allowed in this file", expression.Position, engine.Callstack)
+		return util.GenerateIntPrimitive(-1)
 	}
 }
 
-// TODO
 func (engine *BirEngine) ResolveNamespaceDeclaration(statement ast.NamespaceDeclarationStatement) {
 	if engine.NamespaceAllowed {
 		engine.Scopestack.PushScope(scope.Scope{})
@@ -949,7 +964,6 @@ func (engine *BirEngine) ResolveNamespaceDeclaration(statement ast.NamespaceDecl
 	}
 }
 
-// TODO
 func (engine *BirEngine) ResolveNamespaceIndexerExpression(raw map[string]interface{}) ast.IntPrimitiveExpression {
 	expression := ast.NamespaceIndexerExpression{}
 	engine.HandleAnonymousError(mapstructure.Decode(raw, &expression))
@@ -1027,7 +1041,7 @@ func (engine *BirEngine) ResolveArithmeticExpression(raw map[string]interface{})
 }
 
 func (engine BirEngine) GetAnonymousIndex(position ast.Position) string {
-	return "[" + engine.Filename + "->" + strconv.Itoa(int(position.Line)) + ":" + strconv.Itoa(int(position.Col)) + "]"
+	return "[" + engine.Filename + " " + strconv.Itoa(int(position.Line)) + ":" + strconv.Itoa(int(position.Col)) + "]"
 }
 
 func (engine BirEngine) FindOwner(id string, expression ast.BlockCallExpression) *BirEngine {
@@ -1050,12 +1064,13 @@ func (engine BirEngine) FindOwner(id string, expression ast.BlockCallExpression)
 
 func NewEngine(path string, anonymous bool, colored_output bool, verbosity_level int) BirEngine {
 	engine := BirEngine{
-		Path:             path,
-		NamespaceAllowed: false,
-		Anonymous:        anonymous,
-		ColoredOutput:    colored_output,
-		VerbosityLevel:   verbosity_level,
-		Implementors:     []implementor.Implementor{{Name: "bir"}},
+		Path:                path,
+		NamespaceAllowed:    false,
+		ScopeMutaterAllowed: false,
+		Anonymous:           anonymous,
+		ColoredOutput:       colored_output,
+		VerbosityLevel:      verbosity_level,
+		Implementors:        []implementor.Implementor{{Name: "bir"}},
 	}
 	return engine
 }
