@@ -1,4 +1,4 @@
-namespace std {
+namespace util {
   const push = 1000000 
   const pull = 1000001 
   const read = 1000002 
@@ -6,4 +6,5 @@ namespace std {
   const out = 1000004 
   const file = 1000005 
   const done = 1000006
+  const in = 1000007 
 }

@@ -1,7 +1,7 @@
-use "std"
+use "std:util"
+use "std:io"
 
-test:verb [] {
-  return verb
-}
+let d = print (56)
 
-let d = test:std.write ()
+message implements console {[d, 32, d]}
+message:util.out ()

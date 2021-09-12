@@ -147,18 +147,35 @@ func (engine *BirEngine) Init() {
 }
 
 func (engine *BirEngine) AddImports(stack map[string]interface{}) {
+	var is_standard bool
 	for _, use := range stack["imports"].([]interface{}) {
 		var statement ast.UseStatement
 		engine.HandleAnonymousError(mapstructure.Decode(use, &statement))
 
-		use_path := path.Join(engine.StdPath, statement.Source.Value+".bir")
-		if _, err := os.Stat(use_path); os.IsNotExist(err) {
-			engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position, engine.Callstack)
+		var use_path string
+		if strings.HasPrefix(statement.Source.Value, "std:") {
+			is_standard = true
+			use_path = path.Join(engine.StdPath, strings.Split(statement.Source.Value, "std:")[1]+".bir")
+			if _, err := os.Stat(use_path); os.IsNotExist(err) {
+				engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position, engine.Callstack)
+			}
+		} else if strings.HasPrefix(statement.Source.Value, "module:") {
+			is_standard = false
+			use_path = path.Join(engine.Directory, strings.Split(statement.Source.Value, "module:")[1])
+			if _, err := os.Stat(use_path); os.IsNotExist(err) {
+				engine.Thrower.Throw("Import '"+statement.Source.Value+"' could not be found", statement.Position, engine.Callstack)
+			}
+		} else {
+			is_standard = false
+			engine.Thrower.Throw("Uknown use prefix '"+strings.Split(statement.Source.Value, ":")[0]+"'", statement.Position, engine.Callstack)
 		}
 
 		use_engine := BirEngine{Path: use_path}
+		use_engine.Implementors = engine.Implementors
 		use_engine.Init()
-		use_engine.NamespaceAllowed = true
+		if is_standard {
+			use_engine.NamespaceAllowed = true
+		}
 		use_engine.Run()
 
 		s := use_engine.Scopestack.GetCurrentScope()
@@ -649,7 +666,6 @@ func (engine BirEngine) PushVerbs(expression ast.BlockCallExpression, block ast.
 	return result
 }
 
-// TODO: Check if implemented block is foreign
 func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming string) ast.IntPrimitiveExpression {
 	expression := ast.BlockCallExpression{}
 	engine.HandleError(mapstructure.Decode(raw, &expression), expression.Position)
@@ -661,9 +677,19 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 			if result.Foreign {
 				owner := engine.FindOwner(result.Block.Owner, expression)
 				owner.Scopestack.PushScope(engine.GetCurrentScope())
-				owner.ResolveBlockCall(raw, owner.ID)
+
+				local_scope := []scope.Value{}
+
+				local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
+				local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+
+				for _, value := range local_scope {
+					owner.Scopestack.AddVariable(value)
+				}
+
+				value := owner.ResolveBlockCall(raw, owner.ID)
 				owner.Scopestack.PopScope()
-				return util.GenerateIntPrimitive(-1)
+				return value
 			} else {
 				if result.Block.Native {
 					var body ast.NativeFunction
@@ -701,8 +727,27 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 				if result.Block.Implementing {
 					implemented := engine.Scopestack.FindBlock(result.Block.Implements.Value)
 					instance := result.Block.Instance.(*scope.Scope)
-					engine.Scopestack.PushScope(*instance)
 
+					if implemented.Foreign {
+						owner := engine.FindOwner(implemented.Block.Owner, expression)
+						engine.Scopestack.PushScope(*instance)
+						raw["name"].(map[string]interface{})["value"] = implemented.Block.Name.Value
+
+						local_scope := []scope.Value{}
+
+						local_scope = append(local_scope, engine.PushArguments(expression, *implemented.Block, incoming)...)
+						local_scope = append(local_scope, engine.PushVerbs(expression, *implemented.Block, incoming)...)
+
+						for _, value := range local_scope {
+							owner.Scopestack.AddVariable(value)
+						}
+
+						value := owner.ResolveBlockCall(raw, owner.ID)
+						owner.Scopestack.PopScope()
+						return value
+					}
+
+					engine.Scopestack.PushScope(*instance)
 					local_scope := []scope.Value{}
 
 					local_scope = append(local_scope, engine.PushArguments(expression, *implemented.Block, incoming)...)
@@ -729,13 +774,15 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 					instance := result.Block.Instance.(*scope.Scope)
 					engine.Scopestack.PushScope(*instance)
 
-					local_scope := []scope.Value{}
+					if incoming == "" {
+						local_scope := []scope.Value{}
 
-					local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
-					local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
+						local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
+						local_scope = append(local_scope, engine.PushVerbs(expression, *result.Block, incoming)...)
 
-					for _, value := range local_scope {
-						engine.Scopestack.AddVariable(value)
+						for _, value := range local_scope {
+							engine.Scopestack.AddVariable(value)
+						}
 					}
 
 					engine.Callstack = engine.PushCallstack(Callstack{

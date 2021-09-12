@@ -1,41 +1,9 @@
-use "console"
-use "std" as std
-
-message implements console {"Hello, World!"}
-message:output ()
-
-// Namespaces
-
-namespace User {
-  query implements console 
-  fullname implements string 
-  const age = 21
-
-  ask_name [] {
-    query:input ()
-
-    for query:length () as i {
-      fullname:push (query:read (i))
-    }
-  }
+io [] pointed {
+  
 }
 
-// Accessing the scope
+file implements io "./bir.config.json"
+file:io.read_store ()
+file:io.read_get () // Returns the pointer to the buffer block (? idk)
 
-User.ask_name ()
-User.fullname:output ()
-print (User.age)
-
-// Pointer super block
-
-file implements pointer {"./bir.config.json"}
-file:read (std.file)
-
-data implements json {"./bir.config.json"}
-data:read (0) // 1
-data:read (2, 1) // 21
-data:read (2, 0, 8) // 32
-
-// OR
-
-file implements io {"./bir.config.json", pointed}
+file:io.out ()

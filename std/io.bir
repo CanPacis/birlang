@@ -1,6 +1,4 @@
-use "std"
-const out = 1000100
-const in = 1000101
+use "std:util"
 
 console:verb [value] {
   init {
@@ -8,21 +6,21 @@ console:verb [value] {
   }
 
   switch verb {
-    case out {
+    case util.out {
       for index as i {
-        bir:std_push ([Read i])
+        bir:util.push ([Read i])
       }
-      bir:std_write (std_out)
-    } case std_push {
+      bir:util.write (util.out)
+    } case util.push {
       [Write index, value]
       index++
-    } case in {
-      bir:std_read (std_out)
+    } case util.in {
+      bir:util.read (util.out)
       let done = -1
-      while done !== std_done {
-        let v = bir:std_pull ()
-        if v == std_done {
-          done = std_done
+      while done !== util.done {
+        let v = bir:util.pull ()
+        if v == util.done {
+          done = util.done
         }else {
           [Write index, v]
           index++
@@ -30,4 +28,8 @@ console:verb [value] {
       }
     }
   }
+}
+
+print [n] {
+  return n + 1
 }

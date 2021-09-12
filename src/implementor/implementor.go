@@ -23,10 +23,12 @@ const (
 	StdOut
 	StdFile
 	StdDone
+	StdIn
 )
 
 func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(verbs) > 0 {
+		fmt.Println(verbs[0])
 		switch verbs[0].Value {
 		case StdPush:
 			return implementor.Push(arguments)
@@ -45,6 +47,7 @@ func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arg
 
 func (implementor Implementor) Push(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(arguments) > 0 {
+		fmt.Println(arguments)
 		io_buffer = append(io_buffer, byte(arguments[0].Value))
 		return util.GenerateNativeFunctionReturn(false, false, "", -1)
 	} else {
