@@ -2,7 +2,6 @@ package implementor
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 
 	"github.com/canpacis/birlang/src/ast"
@@ -28,7 +27,6 @@ const (
 
 func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(verbs) > 0 {
-		fmt.Println(verbs[0])
 		switch verbs[0].Value {
 		case StdPush:
 			return implementor.Push(arguments)
@@ -47,7 +45,6 @@ func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arg
 
 func (implementor Implementor) Push(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(arguments) > 0 {
-		fmt.Println(arguments)
 		io_buffer = append(io_buffer, byte(arguments[0].Value))
 		return util.GenerateNativeFunctionReturn(false, false, "", -1)
 	} else {
@@ -57,7 +54,6 @@ func (implementor Implementor) Push(arguments []ast.IntPrimitiveExpression) ast.
 
 func (implementor Implementor) Pull() ast.NativeFunctionReturn {
 	var element int64
-	fmt.Println(io_buffer)
 
 	if len(io_buffer) > 0 {
 		element = int64(io_buffer[0])
@@ -65,7 +61,6 @@ func (implementor Implementor) Pull() ast.NativeFunctionReturn {
 	} else {
 		element = StdDone
 	}
-	fmt.Println("Pulled value: ", element)
 	return util.GenerateNativeFunctionReturn(false, false, "", element)
 }
 

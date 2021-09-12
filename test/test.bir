@@ -1,7 +1,7 @@
 use "std:util"
 use "std:io"
 
-let d = print (56)
+let d = print (104)
 
-message implements console {[d, 32, d]}
+message implements console {"i i"}
 message:util.out ()

@@ -10,6 +10,7 @@ console:verb [value] {
       for index as i {
         bir:util.push ([Read i])
       }
+      bir:index ()
       bir:util.write (util.out)
     } case util.push {
       [Write index, value]

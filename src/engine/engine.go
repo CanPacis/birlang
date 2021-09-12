@@ -17,6 +17,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+// TODO: Complete aapplying config
 func ApplyConfig(options map[string]interface{}, instance *BirEngine) {
 	var config map[string]interface{}
 	mapstructure.Decode(options, &config)
@@ -676,7 +677,9 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 		if len(engine.Callstack) <= engine.MaximumCallstackSize {
 			if result.Foreign {
 				owner := engine.FindOwner(result.Block.Owner, expression)
+				instance := result.Block.Instance.(*scope.Scope)
 				owner.Scopestack.PushScope(engine.GetCurrentScope())
+				owner.Scopestack.PushScope(*instance)
 
 				local_scope := []scope.Value{}
 
@@ -688,6 +691,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 				}
 
 				value := owner.ResolveBlockCall(raw, owner.ID)
+				owner.Scopestack.PopScope()
 				owner.Scopestack.PopScope()
 				return value
 			} else {
@@ -730,7 +734,8 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 
 					if implemented.Foreign {
 						owner := engine.FindOwner(implemented.Block.Owner, expression)
-						engine.Scopestack.PushScope(*instance)
+						owner.Scopestack.PushScope(engine.GetCurrentScope())
+						owner.Scopestack.PushScope(*instance)
 						raw["name"].(map[string]interface{})["value"] = implemented.Block.Name.Value
 
 						local_scope := []scope.Value{}
@@ -743,6 +748,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 						}
 
 						value := owner.ResolveBlockCall(raw, owner.ID)
+						owner.Scopestack.PopScope()
 						owner.Scopestack.PopScope()
 						return value
 					}
@@ -772,9 +778,9 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 					var body ast.BlockBody
 					engine.HandleAnonymousError(mapstructure.Decode(result.Block.Body, &body))
 					instance := result.Block.Instance.(*scope.Scope)
-					engine.Scopestack.PushScope(*instance)
 
 					if incoming == "" {
+						engine.Scopestack.PushScope(*instance)
 						local_scope := []scope.Value{}
 
 						local_scope = append(local_scope, engine.PushArguments(expression, *result.Block, incoming)...)
