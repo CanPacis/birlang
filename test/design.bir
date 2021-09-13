@@ -7,3 +7,19 @@ file:io.read_store ()
 file:io.read_get () // Returns the pointer to the buffer block (? idk)
 
 file:io.out ()
+
+// Local variables instead of special index variable
+// Local variables get updated with population values
+
+io [] {
+  init {
+    local index = 0
+    local data = 0
+  }
+}
+
+message implements io {index:"Hello, World!", data: [0, 1, 2, 3]}
+
+
+ali:veli:49:50 ()
+ali ()

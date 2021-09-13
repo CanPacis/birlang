@@ -529,46 +529,93 @@ func (engine *BirEngine) ResolveBlockDeclaration(statement ast.BlockDeclarationS
 				implemented := engine.Scopestack.FindBlock(statement.Implements.Value)
 				statement.Instance = implemented.Block.Instance
 
-				if statement.Populate != nil {
-					_type := statement.Populate.(map[string]interface{})["type"]
+				calculate_index_buffer := func(j int) int {
+					buffer := 0
 
-					engine.Scopestack.PushScope(*statement.Instance.(*scope.Scope))
+					if j > 0 {
+						previous_type := statement.Populate[j-1].Value.(map[string]interface{})["type"]
+						switch previous_type {
+						case "string":
+							var previous_populate ast.StringPrimitiveExpression
+							engine.HandleAnonymousError(mapstructure.Decode(statement.Populate[j-1].Value, &previous_populate))
+							buffer = len(previous_populate.Value)
+						case "array":
+							var previous_populate ast.ArrayPrimitiveExpression
+							engine.HandleAnonymousError(mapstructure.Decode(statement.Populate[j-1].Value, &previous_populate))
+							buffer = len(previous_populate.Values)
+						}
+					}
+
+					return buffer
+				}
+
+				throw_population_label_error := func(population ast.Population) {
+					engine.Thrower.Throw("Could not find a local variable '"+population.Key+"' from population label. Labelled populations must have a local variable counterpart.", population.Position, engine.Callstack)
+				}
+
+				engine.Scopestack.PushScope(*statement.Instance.(*scope.Scope))
+				for j, population := range statement.Populate {
+					_type := population.Value.(map[string]interface{})["type"]
+
 					switch _type {
 					case "string":
 						var populate ast.StringPrimitiveExpression
-						engine.HandleAnonymousError(mapstructure.Decode(statement.Populate, &populate))
+						engine.HandleAnonymousError(mapstructure.Decode(population.Value, &populate))
+
+						buffer := calculate_index_buffer(j)
 
 						for i, value := range populate.Value {
 							engine.Scopestack.AddVariable(scope.Value{
-								Key:   util.GenerateIdentifier("value_" + strconv.Itoa(i)),
+								Key:   util.GenerateIdentifier("value_" + strconv.Itoa(i+buffer)),
 								Value: util.GenerateIntPrimitive(int64(value)),
 								Kind:  "const",
 							})
 						}
 
-						if engine.Scopestack.VariableExists("index") {
-							engine.Scopestack.UpdateVariable("index", util.GenerateIntPrimitive(int64(len(populate.Value))))
+						if population.Key != "" {
+							if engine.Scopestack.VariableExists(population.Key) {
+								local_variable := engine.Scopestack.FindVariable(population.Key)
+
+								if !local_variable.OuterScope && !local_variable.Immutable && local_variable.Value.Kind == "local" {
+									engine.Scopestack.UpdateVariable(population.Key, util.GenerateIntPrimitive(int64(len(populate.Value))))
+								} else {
+									throw_population_label_error(population)
+								}
+							} else {
+								throw_population_label_error(population)
+							}
 						}
 					case "array":
 						var populate ast.ArrayPrimitiveExpression
-						engine.HandleAnonymousError(mapstructure.Decode(statement.Populate, &populate))
+						engine.HandleAnonymousError(mapstructure.Decode(population.Value, &populate))
+
+						buffer := calculate_index_buffer(j)
 
 						for i, value := range populate.Values {
 							v := engine.ResolveExpression(value)
 							engine.Scopestack.AddVariable(scope.Value{
-								Key:   util.GenerateIdentifier("value_" + strconv.Itoa(i)),
+								Key:   util.GenerateIdentifier("value_" + strconv.Itoa(i+buffer)),
 								Value: v,
 								Kind:  "const",
 							})
 						}
 
-						if engine.Scopestack.VariableExists("index") {
-							engine.Scopestack.UpdateVariable("index", util.GenerateIntPrimitive(int64(len(populate.Values))))
+						if population.Key != "" {
+							if engine.Scopestack.VariableExists(population.Key) {
+								local_variable := engine.Scopestack.FindVariable(population.Key)
+
+								if !local_variable.OuterScope && !local_variable.Immutable && local_variable.Value.Kind == "local" {
+									engine.Scopestack.UpdateVariable(population.Key, util.GenerateIntPrimitive(int64(len(populate.Values))))
+								} else {
+									throw_population_label_error(population)
+								}
+							} else {
+								throw_population_label_error(population)
+							}
 						}
 					}
-					statement.Instance = engine.Scopestack.PopScope()
 				}
-
+				statement.Instance = engine.Scopestack.PopScope()
 			} else {
 				engine.Thrower.Throw("Could not implement '"+statement.Implements.Value+"', block is non-existant", statement.Implements.Position, engine.Callstack)
 			}

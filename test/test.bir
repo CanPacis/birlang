@@ -3,7 +3,7 @@ use "std:io"
 
 uint16encoder:verb [n] {
   init {
-    let index = 0
+    local index = 0
     const buffer = 1000000
 
     for 10 as i {
@@ -15,8 +15,8 @@ uint16encoder:verb [n] {
     case util.write {
       for n log as i {
         let value = {n / {10^i}} % 10
-        index++
         [Write n log - 1 - index, value]
+        index++
       }
     }
     case util.read {
@@ -30,3 +30,17 @@ uint16encoder:verb [n] {
     }
   }
 }
+
+encoder implements uint16encoder
+encoder:util.write (10515)
+
+let d = encoder:util.size ()
+
+add [] {
+  init {
+    local index = 0
+    local data = 0
+  }
+}
+
+toplam implements add {index: "Hi", data: [0, 1, 2]}

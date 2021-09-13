@@ -47,10 +47,17 @@ type BlockDeclarationStatement struct {
 	Body         interface{}  `json:"body"`
 	Implementing bool         `json:"implementing"`
 	Implements   Identifier   `json:"implements"`
-	Populate     interface{}  `json:"populate"`
+	Populate     []Population `json:"populate"`
 	Position     Position     `json:"position"`
 	Instance     interface{}  `json:"instance"`
 	Native       bool         `json:"native"`
+}
+
+type Population struct {
+	Operation string      `json:"operation"`
+	Key       string      `json:"key"`
+	Value     interface{} `json:"value"`
+	Position  Position    `json:"position"`
 }
 
 type NativeFunction func(arguments []IntPrimitiveExpression, verbs []IntPrimitiveExpression) NativeFunctionReturn
