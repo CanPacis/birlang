@@ -15,26 +15,28 @@ type Implementor struct {
 }
 
 const (
-	StdPush = iota + 1000000
-	StdPull
-	StdRead
-	StdWrite
-	StdOut
-	StdFile
-	StdDone
-	StdIn
+	UtilPush = iota + 1000000
+	UtilPull
+	UtilRead
+	UtilWrite
+	UtilOut
+	UtilFile
+	UtilDone
+	UtilIn
+	UtilSize
+	UtilUnknown
 )
 
 func (implementor Implementor) Interface(verbs []ast.IntPrimitiveExpression, arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(verbs) > 0 {
 		switch verbs[0].Value {
-		case StdPush:
+		case UtilPush:
 			return implementor.Push(arguments)
-		case StdPull:
+		case UtilPull:
 			return implementor.Pull()
-		case StdRead:
+		case UtilRead:
 			return implementor.Read(arguments)
-		case StdWrite:
+		case UtilWrite:
 			return implementor.Write(arguments)
 		}
 		return util.GenerateNativeFunctionReturn(false, false, "", -1)
@@ -59,7 +61,7 @@ func (implementor Implementor) Pull() ast.NativeFunctionReturn {
 		element = int64(io_buffer[0])
 		io_buffer = io_buffer[1:]
 	} else {
-		element = StdDone
+		element = UtilDone
 	}
 	return util.GenerateNativeFunctionReturn(false, false, "", element)
 }
@@ -67,12 +69,12 @@ func (implementor Implementor) Pull() ast.NativeFunctionReturn {
 func (implementor Implementor) Read(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(arguments) > 0 {
 		switch arguments[0].Value {
-		case StdOut:
+		case UtilOut:
 			scanner := bufio.NewScanner(os.Stdin)
 			scanner.Scan()
 			text := scanner.Text()
 			io_buffer = append(io_buffer, []byte(text)...)
-		case StdFile:
+		case UtilFile:
 		}
 		io_buffer = []byte{}
 		return util.GenerateNativeFunctionReturn(false, false, "", -1)
@@ -84,9 +86,9 @@ func (implementor Implementor) Read(arguments []ast.IntPrimitiveExpression) ast.
 func (implementor Implementor) Write(arguments []ast.IntPrimitiveExpression) ast.NativeFunctionReturn {
 	if len(arguments) > 0 {
 		switch arguments[0].Value {
-		case StdOut:
+		case UtilOut:
 			os.Stdout.WriteString(string(io_buffer))
-		case StdFile:
+		case UtilFile:
 		}
 		io_buffer = []byte{}
 		return util.GenerateNativeFunctionReturn(false, false, "", -1)

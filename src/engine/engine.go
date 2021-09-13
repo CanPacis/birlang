@@ -17,7 +17,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// TODO: Complete aapplying config
+// TODO: Complete applying config
 func ApplyConfig(options map[string]interface{}, instance *BirEngine) {
 	var config map[string]interface{}
 	mapstructure.Decode(options, &config)
@@ -33,7 +33,6 @@ func ApplyConfig(options map[string]interface{}, instance *BirEngine) {
 	for _, use := range instance.Uses {
 		ApplyConfig(instance.Config, &use)
 	}
-
 }
 
 type BirEngine struct {
@@ -109,8 +108,6 @@ func (engine *BirEngine) Init() {
 	engine.ID = util.UUID()
 	engine.MaximumCallstackSize = 8000
 	engine.Thrower = thrower.Thrower{Owner: engine, Color: util.NewColor(engine.ColoredOutput)}
-	cwd, _ := os.Getwd()
-	engine.StdPath = path.Join(cwd, "std")
 	engine.Scopestack.PushScope(scope.Scope{})
 
 	for _, i := range engine.Implementors {
@@ -149,9 +146,9 @@ func (engine *BirEngine) Init() {
 	}
 }
 
-// TODO: Unknown prefix throws error and exits in REPL
 func (engine *BirEngine) AddImports(stack map[string]interface{}) {
 	var is_standard bool
+	var should_continue bool
 	for _, use := range stack["imports"].([]interface{}) {
 		var statement ast.UseStatement
 		engine.HandleAnonymousError(mapstructure.Decode(use, &statement))
@@ -159,39 +156,44 @@ func (engine *BirEngine) AddImports(stack map[string]interface{}) {
 		var use_path string
 		if strings.HasPrefix(statement.Source.Value, "std:") {
 			is_standard = true
+			should_continue = true
 			use_path = path.Join(engine.StdPath, strings.Split(statement.Source.Value, "std:")[1]+".bir")
 			if _, err := os.Stat(use_path); os.IsNotExist(err) {
 				engine.Thrower.Throw("Import '"+statement.Source.Value+"' is not included in the standard library", statement.Position, engine.Callstack)
 			}
 		} else if strings.HasPrefix(statement.Source.Value, "module:") {
 			is_standard = false
+			should_continue = true
 			use_path = path.Join(engine.Directory, strings.Split(statement.Source.Value, "module:")[1])
 			if _, err := os.Stat(use_path); os.IsNotExist(err) {
 				engine.Thrower.Throw("Import '"+statement.Source.Value+"' could not be found", statement.Position, engine.Callstack)
 			}
 		} else {
 			is_standard = false
+			should_continue = false
 			engine.Thrower.Throw("Uknown use prefix '"+strings.Split(statement.Source.Value, ":")[0]+"'", statement.Position, engine.Callstack)
 		}
 
-		use_engine := NewEngine(use_path, engine.Anonymous, engine.ColoredOutput, engine.VerbosityLevel)
-		use_engine.Implementors = engine.Implementors
-		use_engine.Init()
-		if is_standard {
-			use_engine.NamespaceAllowed = true
-			use_engine.ScopeMutaterAllowed = true
-		}
-		use_engine.Run()
+		if should_continue {
+			use_engine := NewEngine(use_path, engine.StdPath, engine.Anonymous, engine.ColoredOutput, engine.VerbosityLevel)
+			use_engine.Implementors = engine.Implementors
+			use_engine.Init()
+			if is_standard {
+				use_engine.NamespaceAllowed = true
+				use_engine.ScopeMutaterAllowed = true
+			}
+			use_engine.Run()
 
-		s := use_engine.Scopestack.GetCurrentScope()
-		use_scope := scope.Scope{}
-		use_scope.Blocks = s.Blocks
-		use_scope.Frame = s.Frame
-		use_scope.Foreign = true
-		use_scope.Immutable = true
-		engine.Scopestack.ShiftScope(use_scope)
-		engine.Scopestack.Namespaces = append(engine.Scopestack.Namespaces, use_engine.Scopestack.Namespaces...)
-		engine.Uses = append(engine.Uses, use_engine)
+			s := use_engine.Scopestack.GetCurrentScope()
+			use_scope := scope.Scope{}
+			use_scope.Blocks = s.Blocks
+			use_scope.Frame = s.Frame
+			use_scope.Foreign = true
+			use_scope.Immutable = true
+			engine.Scopestack.ShiftScope(use_scope)
+			engine.Scopestack.Namespaces = append(engine.Scopestack.Namespaces, use_engine.Scopestack.Namespaces...)
+			engine.Uses = append(engine.Uses, use_engine)
+		}
 	}
 }
 
@@ -576,7 +578,7 @@ func (engine *BirEngine) ResolveBlockDeclaration(statement ast.BlockDeclarationS
 			if body.Init != nil {
 				engine.Scopestack.PushScope(scope.Scope{})
 				engine.Callstack = engine.PushCallstack(Callstack{
-					Identifier: statement.Name.Value,
+					Identifier: "$" + statement.Name.Value,
 					Label:      statement.Name.Value + ":init",
 					Stack:      body.Init,
 				})
@@ -868,6 +870,11 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 	expression := ast.ScopeMutaterExpression{}
 	engine.HandleAnonymousError(mapstructure.Decode(raw, &expression))
 
+	if engine.GetCurrentCallStack().Identifier == "main" {
+		engine.Thrower.Throw("Top level scope mutations are not allowed", expression.Position, engine.Callstack)
+		return util.GenerateIntPrimitive(-1)
+	}
+
 	WriteToScope := func() ast.IntPrimitiveExpression {
 		if len(expression.Arguments) < 2 {
 			engine.Thrower.Throw("Scope mutation with 'Write' operation needs at least 2 arguments but '"+strconv.Itoa(len(expression.Arguments))+"' is given", expression.Position, engine.Callstack)
@@ -880,14 +887,20 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 		}
 
 		selected_scope, index := engine.FindUpperBlockScope()
+
+		if index < 0 {
+			engine.Thrower.Throw("Could not find an upper scope to write to", expression.Position, engine.Callstack)
+		}
+
 		selected_scope.AddVariable(scope.Value{
 			Key:   util.GenerateIdentifier("value_" + strconv.Itoa(int(arguments[0].Value))),
 			Value: arguments[1],
 			Kind:  "const",
 		})
 		engine.Scopestack.SwapAtIndex(index, *selected_scope)
+		// fmt.Println(selected_scope)
 
-		return util.GenerateIntPrimitive(-1)
+		return arguments[1]
 	}
 
 	ReadFromScope := func() ast.IntPrimitiveExpression {
@@ -901,12 +914,14 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 			arguments = append(arguments, engine.ResolveExpression(value))
 		}
 
-		selected_scope, i := engine.FindUpperBlockScope()
+		selected_scope, index := engine.FindUpperBlockScope()
 		var selected_value ast.IntPrimitiveExpression
 
-		if i < 0 {
-			engine.Thrower.Throw("IDK", expression.Position, engine.Callstack)
+		if index < 0 {
+			engine.Thrower.Throw("Could not find an upper scope to read from", expression.Position, engine.Callstack)
 		}
+
+		// fmt.Printf("%+v\n\n%+v\n\n", "value_"+strconv.Itoa(int(arguments[0].Value)), selected_scope.Frame)
 
 		for _, value := range selected_scope.Frame {
 			if value.Key.Value == "value_"+strconv.Itoa(int(arguments[0].Value)) {
@@ -921,13 +936,33 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 		return selected_value
 	}
 
-	// TODO: Delete index from scope
 	DeleteFromScope := func() ast.IntPrimitiveExpression {
-		return util.GenerateIntPrimitive(100)
-	}
+		if len(expression.Arguments) < 1 {
+			engine.Thrower.Throw("Scope mutation with 'Delete' operation needs at least 1 argument but '"+strconv.Itoa(len(expression.Arguments))+"' is given", expression.Position, engine.Callstack)
+			return util.GenerateIntPrimitive(-1)
+		}
+		arguments := []ast.IntPrimitiveExpression{}
 
-	if engine.GetCurrentCallStack().Identifier == "main" {
-		engine.Thrower.Throw("Top level scope mutations are not allowed", expression.Position, engine.Callstack)
+		for _, value := range expression.Arguments {
+			arguments = append(arguments, engine.ResolveExpression(value))
+		}
+
+		selected_scope, index := engine.FindUpperBlockScope()
+		var selected_value_index int
+
+		if index < 0 {
+			engine.Thrower.Throw("Could not find an upper scope to delete from", expression.Position, engine.Callstack)
+		}
+
+		for i, value := range selected_scope.Frame {
+			if value.Key.Value == "value_"+strconv.Itoa(int(arguments[0].Value)) {
+				selected_value_index = i
+			}
+		}
+
+		selected_scope.DeleteVariable(selected_value_index)
+		engine.Scopestack.SwapAtIndex(index, *selected_scope)
+
 		return util.GenerateIntPrimitive(-1)
 	}
 
@@ -1034,9 +1069,18 @@ func (engine *BirEngine) ResolveArithmeticExpression(raw map[string]interface{})
 	case "root":
 		return util.GenerateIntPrimitive(int64(math.Pow(float64(left.Value), float64(1/right.Value))))
 	case "log10":
-		return util.GenerateIntPrimitive(-100)
+		var value int64
+		if left.Value == 0 || left.Value == 1 {
+			value = 1
+		} else if util.IsPowerOfTen(left.Value) {
+			value = int64(math.Ceil(math.Log10(float64(left.Value))) + 1)
+		} else {
+			value = int64(math.Ceil(math.Log10(float64(left.Value))))
+		}
+		return util.GenerateIntPrimitive(value)
 	default:
-		return util.GenerateIntPrimitive(-10)
+		engine.Thrower.Throw("Unknown arithmetic operation '"+raw["type"].(string)+"'", raw["position"].(ast.Position), engine.Callstack)
+		return util.GenerateIntPrimitive(-1)
 	}
 }
 
@@ -1062,11 +1106,12 @@ func (engine BirEngine) FindOwner(id string, expression ast.BlockCallExpression)
 	}
 }
 
-func NewEngine(path string, anonymous bool, colored_output bool, verbosity_level int) BirEngine {
+func NewEngine(path string, std_path string, anonymous bool, colored_output bool, verbosity_level int) BirEngine {
 	engine := BirEngine{
 		Path:                path,
 		NamespaceAllowed:    false,
-		ScopeMutaterAllowed: false,
+		ScopeMutaterAllowed: true,
+		StdPath:             std_path,
 		Anonymous:           anonymous,
 		ColoredOutput:       colored_output,
 		VerbosityLevel:      verbosity_level,

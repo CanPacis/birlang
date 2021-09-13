@@ -240,4 +240,8 @@ func (scope *Scope) AddVariable(value Value) {
 	scope.Frame = append(scope.Frame, value)
 }
 
+func (scope *Scope) DeleteVariable(index int) {
+	scope.Frame = append(scope.Frame[:index], scope.Frame[index+1:]...)
+}
+
 type UpdateReport int

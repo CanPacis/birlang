@@ -5,16 +5,11 @@ console:verb [value] {
     let index = 0
   }
 
-  if 1 {
-    throw index
-  }
-
   switch verb {
     case util.out {
       for index as i {
         bir:util.push ([Read i])
       }
-      bir:index ()
       bir:util.write (util.out)
     } case util.push {
       [Write index, value]
@@ -27,8 +22,8 @@ console:verb [value] {
         if v == util.done {
           done = util.done
         }else {
-          index++
           [Write index, v]
+          index++
         }
       }
     }

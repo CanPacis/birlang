@@ -47,6 +47,18 @@ func GenerateIdentifier(name string) ast.Identifier {
 	}
 }
 
+func IsPowerOfTen(input int64) bool {
+	if input%10 != 0 || input == 0 {
+		return false
+	}
+
+	if input == 10 {
+		return true
+	}
+
+	return IsPowerOfTen(input / 10)
+}
+
 func GenerateNativeFunction(name string, body ast.NativeFunction) ast.BlockDeclarationStatement {
 	return ast.BlockDeclarationStatement{
 		Name:         GenerateIdentifier(name),

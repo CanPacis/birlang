@@ -7,4 +7,6 @@ namespace util {
   const file = 1000005 
   const done = 1000006
   const in = 1000007 
+  const size = 1000008
+  const unknown = 1000009 
 }

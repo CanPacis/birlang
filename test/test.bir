@@ -1,13 +1,32 @@
 use "std:util"
 use "std:io"
 
-let d = print (104)
+uint16encoder:verb [n] {
+  init {
+    let index = 0
+    const buffer = 1000000
 
-message implements console {[d, 32, d, 10]}
-message:util.out ()
+    for 10 as i {
+      [Write buffer + i, i + 48]
+    }
+  }
 
-test [] {
-  [Write 0, 10]
+  switch verb {
+    case util.write {
+      for n log as i {
+        let value = {n / {10^i}} % 10
+        index++
+        [Write n log - 1 - index, value]
+      }
+    }
+    case util.read {
+      return [Read buffer + [Read n]]
+    }
+    case util.size {
+      return index
+    }
+    default {
+      throw util.unknown
+    }
+  }
 }
-
-test ()
