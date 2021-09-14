@@ -334,7 +334,7 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 	}
 
 	engine.Callstack = engine.PopCallstack()
-	if value.Position.Line != 0 {
+	if value.Type != "" {
 		return value
 	} else {
 		return util.GenerateIntPrimitive(-1)
