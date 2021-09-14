@@ -334,7 +334,7 @@ func (engine *BirEngine) ResolveCallstack(callstack Callstack) ast.IntPrimitiveE
 	}
 
 	engine.Callstack = engine.PopCallstack()
-	if value.Position.Line != 0 {
+	if value.Type != "" {
 		return value
 	} else {
 		return util.GenerateIntPrimitive(-1)
@@ -945,7 +945,6 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 			Kind:  "const",
 		})
 		engine.Scopestack.SwapAtIndex(index, *selected_scope)
-		// fmt.Println(selected_scope)
 
 		return arguments[1]
 	}
@@ -967,8 +966,6 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 		if index < 0 {
 			engine.Thrower.Throw("Could not find an upper scope to read from", expression.Position, engine.Callstack)
 		}
-
-		// fmt.Printf("%+v\n\n%+v\n\n", "value_"+strconv.Itoa(int(arguments[0].Value)), selected_scope.Frame)
 
 		for _, value := range selected_scope.Frame {
 			if value.Key.Value == "value_"+strconv.Itoa(int(arguments[0].Value)) {
