@@ -2,7 +2,7 @@ use "std:util"
 
 console:verb [value] {
   init {
-    let index = 0
+    local index = 0
   }
 
   switch verb {

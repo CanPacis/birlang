@@ -725,9 +725,9 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 	engine.HandleError(mapstructure.Decode(raw, &expression), expression.Position)
 
 	if engine.Scopestack.BlockExists(expression.Name.Value) {
-		result := engine.Scopestack.FindBlock(expression.Name.Value)
-
 		if len(engine.Callstack) <= engine.MaximumCallstackSize {
+			result := engine.Scopestack.FindBlock(expression.Name.Value)
+
 			if result.Foreign {
 				owner := engine.FindOwner(result.Block.Owner, expression)
 				instance := result.Block.Instance.(*scope.Scope)
@@ -770,6 +770,7 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 						Identifier: "$" + expression.Name.Value,
 						Stack:      []interface{}{},
 					})
+
 					native_function_return := body(verbs, arguments)
 					if native_function_return.Error {
 						engine.Thrower.Throw(native_function_return.Message, expression.Position, engine.Callstack)
@@ -857,7 +858,10 @@ func (engine *BirEngine) ResolveBlockCall(raw map[string]interface{}, incoming s
 						Stack:      body.Program,
 					})
 					value := engine.ResolveCallstack(engine.GetCurrentCallStack())
-					engine.Scopestack.PopScope()
+
+					if incoming == "" {
+						engine.Scopestack.PopScope()
+					}
 					return value
 				}
 			}
@@ -895,7 +899,7 @@ func (engine *BirEngine) ResolveReferenceExpression(raw map[string]interface{}) 
 	}
 }
 
-func (engine BirEngine) FindUpperBlockScope() (*scope.Scope, int) {
+func (engine BirEngine) FindUpperBlockScope() (*scope.Scope, int, *ast.BlockDeclarationStatement) {
 	selected_stack_index := -1
 
 	for i, cs := range engine.ReverseCallstack() {
@@ -905,11 +909,13 @@ func (engine BirEngine) FindUpperBlockScope() (*scope.Scope, int) {
 		}
 	}
 
+	block := engine.Scopestack.FindBlock(engine.ReverseCallstack()[selected_stack_index].Identifier[1:]).Block
+
 	if selected_stack_index < 0 {
-		return &scope.Scope{}, -1
+		return &scope.Scope{}, -1, block
 	} else {
 		selected_scope := (engine.Scopestack.Reverse())[selected_stack_index]
-		return &selected_scope, selected_stack_index
+		return &selected_scope, selected_stack_index, block
 	}
 }
 
@@ -933,7 +939,7 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 			arguments = append(arguments, engine.ResolveExpression(value))
 		}
 
-		selected_scope, index := engine.FindUpperBlockScope()
+		selected_scope, index, b := engine.FindUpperBlockScope()
 
 		if index < 0 {
 			engine.Thrower.Throw("Could not find an upper scope to write to", expression.Position, engine.Callstack)
@@ -945,7 +951,9 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 			Kind:  "const",
 		})
 		engine.Scopestack.SwapAtIndex(index, *selected_scope)
-		// fmt.Println(selected_scope)
+		if b != nil {
+			b.Instance = selected_scope
+		}
 
 		return arguments[1]
 	}
@@ -961,14 +969,12 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 			arguments = append(arguments, engine.ResolveExpression(value))
 		}
 
-		selected_scope, index := engine.FindUpperBlockScope()
+		selected_scope, index, _ := engine.FindUpperBlockScope()
 		var selected_value ast.IntPrimitiveExpression
 
 		if index < 0 {
 			engine.Thrower.Throw("Could not find an upper scope to read from", expression.Position, engine.Callstack)
 		}
-
-		// fmt.Printf("%+v\n\n%+v\n\n", "value_"+strconv.Itoa(int(arguments[0].Value)), selected_scope.Frame)
 
 		for _, value := range selected_scope.Frame {
 			if value.Key.Value == "value_"+strconv.Itoa(int(arguments[0].Value)) {
@@ -994,7 +1000,7 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 			arguments = append(arguments, engine.ResolveExpression(value))
 		}
 
-		selected_scope, index := engine.FindUpperBlockScope()
+		selected_scope, index, b := engine.FindUpperBlockScope()
 		var selected_value_index int
 
 		if index < 0 {
@@ -1009,6 +1015,9 @@ func (engine *BirEngine) ResolveScopeMutaterExpression(raw map[string]interface{
 
 		selected_scope.DeleteVariable(selected_value_index)
 		engine.Scopestack.SwapAtIndex(index, *selected_scope)
+		if b != nil {
+			b.Instance = selected_scope
+		}
 
 		return util.GenerateIntPrimitive(-1)
 	}

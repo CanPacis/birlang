@@ -16,7 +16,7 @@ uint16encoder:verb [n] {
       for n log as i {
         let value = {n / {10^i}} % 10
         [Write n log - 1 - index, value]
-        index++
+        index = i + 1
       }
     }
     case util.read {
@@ -31,16 +31,8 @@ uint16encoder:verb [n] {
   }
 }
 
-encoder implements uint16encoder
+// encoder implements uint16decoder {index: [1,0,5,1,5]}
+encoder implements uint16decoder
 encoder:util.write (10515)
 
 let d = encoder:util.size ()
-
-add [] {
-  init {
-    local index = 0
-    local data = 0
-  }
-}
-
-toplam implements add {index: "Hi", data: [0, 1, 2]}

@@ -2,8 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
-	"fmt"
 	"os"
 
 	"github.com/canpacis/birlang/src/engine"
@@ -17,8 +15,8 @@ func main() {
 			instance.Init()
 			instance.Run()
 
-			v, _ := json.MarshalIndent(instance.GetCurrentScope().Frame, "", "  ")
-			fmt.Println(string(v))
+			// v, _ := json.MarshalIndent(instance.GetCurrentScope().Frame, "", "  ")
+			// fmt.Println(string(v))
 
 			// v, _ := json.MarshalIndent(instance.GetCurrentScope().Blocks[1], "", "  ")
 			// fmt.Println(string(v))
